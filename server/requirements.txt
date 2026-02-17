@@ -4,3 +4,4 @@ SQLAlchemy
 asyncpg
 pydantic-settings
 orjson
+redis
