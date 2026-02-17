@@ -16,7 +16,6 @@ class PractitionerRepository:
     async def create(self, practitioner: Practitioner) -> Practitioner:
         # Create Practitioner Model
         db_practitioner = PractitionerModel(
-            id=practitioner.id,
             active=practitioner.active,
             gender=practitioner.gender,
             birth_date=practitioner.birthDate
@@ -95,9 +94,9 @@ class PractitionerRepository:
             raise
         
         # Re-fetch to confirm and load relationships
-        return await self.get(practitioner.id)
+        return await self.get(db_practitioner.id)
 
-    async def get(self, practitioner_id: str) -> Optional[Practitioner]:
+    async def get(self, practitioner_id: int) -> Optional[Practitioner]:
         stmt = (
             select(PractitionerModel)
             .where(PractitionerModel.id == practitioner_id)
@@ -132,7 +131,7 @@ class PractitionerRepository:
         db_practitioners = result.scalars().all()
         return [self._map_to_fhir(p) for p in db_practitioners]
 
-    async def delete(self, practitioner_id: str) -> bool:
+    async def delete(self, practitioner_id: int) -> bool:
         stmt = select(PractitionerModel).where(PractitionerModel.id == practitioner_id)
         result = await self.session.execute(stmt)
         db_practitioner = result.scalars().first()
@@ -151,7 +150,7 @@ class PractitionerRepository:
     def _map_to_fhir(self, db_practitioner: PractitionerModel) -> Practitioner:
         practitioner_data = {
             "resourceType": "Practitioner",
-            "id": db_practitioner.id,
+            "id": str(db_practitioner.id),  # Convert int to str for FHIR
             "active": db_practitioner.active,
             "gender": db_practitioner.gender,
             "birthDate": db_practitioner.birth_date,

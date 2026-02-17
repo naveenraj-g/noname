@@ -10,7 +10,6 @@ from fhir.resources.humanname import HumanName
 from fhir.resources.identifier import Identifier
 from fhir.resources.contactpoint import ContactPoint
 from fhir.resources.address import Address
-import uuid
 
 class PatientRepository:
     def __init__(self, session: AsyncSession):
@@ -19,7 +18,6 @@ class PatientRepository:
     async def create(self, patient: Patient) -> Patient:
         # Create Patient Model
         db_patient = PatientModel(
-            id=patient.id,
             active=patient.active,
             gender=patient.gender,
             birth_date=patient.birthDate,
@@ -85,9 +83,9 @@ class PatientRepository:
             raise
         
         # Re-fetch to confirm and load relationships
-        return await self.get(patient.id)
+        return await self.get(db_patient.id)
 
-    async def get(self, patient_id: str) -> Optional[Patient]:
+    async def get(self, patient_id: int) -> Optional[Patient]:
         stmt = (
             select(PatientModel)
             .where(PatientModel.id == patient_id)
@@ -120,7 +118,7 @@ class PatientRepository:
         db_patients = result.scalars().all()
         return [self._map_to_fhir(p) for p in db_patients]
 
-    async def delete(self, patient_id: str) -> bool:
+    async def delete(self, patient_id: int) -> bool:
         stmt = select(PatientModel).where(PatientModel.id == patient_id)
         result = await self.session.execute(stmt)
         db_patient = result.scalars().first()
@@ -140,7 +138,7 @@ class PatientRepository:
     def _map_to_fhir(self, db_patient: PatientModel) -> Patient:
         patient_data = {
             "resourceType": "Patient",
-            "id": db_patient.id,
+            "id": str(db_patient.id),  # Convert int to str for FHIR
             "active": db_patient.active,
             "gender": db_patient.gender,
             "birthDate": db_patient.birth_date,

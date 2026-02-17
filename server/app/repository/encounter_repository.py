@@ -7,94 +7,183 @@ from app.models.encounter import (
     EncounterModel, EncounterType, EncounterParticipant,
     EncounterDiagnosis, EncounterLocation, EncounterReasonCode
 )
+from app.models.enum import ParticipantReferenceType
 from fhir.resources.encounter import Encounter
+from datetime import datetime
 
 class EncounterRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def create(self, encounter: Encounter) -> Encounter:
+    async def create(self, encounter_data: dict) -> Encounter:
+        # Extract patient_id from subject reference (expecting format: Patient/123)
+        patient_id = None
+        subject = encounter_data.get("subject")
+        if subject and subject.get("reference"):
+            ref_parts = subject["reference"].split("/")
+            if len(ref_parts) == 2 and ref_parts[0] == "Patient":
+                try:
+                    patient_id = int(ref_parts[1])  # Convert to int
+                except ValueError:
+                    raise ValueError(f"Invalid patient ID in subject reference: {ref_parts[1]}")
+        
+        if not patient_id:
+            raise ValueError("Encounter must have a valid Patient subject reference")
+        
+        # Extract class_code
+        class_data = encounter_data.get("class", {})
+        class_code = class_data.get("code") if isinstance(class_data, dict) else None
+        
+        # Extract period and parse datetime strings
+        period = encounter_data.get("period", {})
+        period_start = period.get("start") if isinstance(period, dict) else None
+        period_end = period.get("end") if isinstance(period, dict) else None
+        
+        # Parse datetime strings to datetime objects
+        if period_start and isinstance(period_start, str):
+            period_start = datetime.fromisoformat(period_start.replace('Z', '+00:00'))
+        if period_end and isinstance(period_end, str):
+            period_end = datetime.fromisoformat(period_end.replace('Z', '+00:00'))
+        
+        # Extract priority
+        priority_data = encounter_data.get("priority")
+        priority_text = priority_data.get("text") if isinstance(priority_data, dict) else None
+        
         # Create Encounter Model
         db_encounter = EncounterModel(
-            id=encounter.id,
-            status=encounter.status,
-            class_code=encounter.class_fhir.code if encounter.class_fhir else None,
-            priority=encounter.priority.text if encounter.priority else None,
-            subject_reference=encounter.subject.reference if encounter.subject else None,
-            period_start=encounter.period.start if encounter.period else None,
-            period_end=encounter.period.end if encounter.period else None
+            status=encounter_data.get("status"),
+            class_code=class_code,
+            priority=priority_text,
+            patient_id=patient_id,
+            period_start=period_start,
+            period_end=period_end
         )
         
         # Map Types
-        if encounter.type:
-            for type_item in encounter.type:
-                for coding in (type_item.coding or []):
+        types = encounter_data.get("type", [])
+        if types and isinstance(types, list):
+            for type_item in types:
+                coding_list = type_item.get("coding", [])
+                for coding in coding_list:
                     db_type = EncounterType(
-                        coding_system=coding.system,
-                        coding_code=coding.code,
-                        coding_display=coding.display,
-                        text=type_item.text,
+                        coding_system=coding.get("system"),
+                        coding_code=coding.get("code"),
+                        coding_display=coding.get("display"),
+                        text=type_item.get("text"),
                         encounter=db_encounter
                     )
                 
         # Map Participants
-        if encounter.participant:
-            for participant in encounter.participant:
+        participants = encounter_data.get("participant", [])
+        if participants and isinstance(participants, list):
+            for participant in participants:
+                type_list = participant.get("type", [])
                 type_text = None
-                if participant.type:
-                    type_text = ",".join([t.text for t in participant.type if t.text])
+                if type_list:
+                    type_text = ",".join([t.get("text", "") for t in type_list if t.get("text")])
+                
+                # Parse individual reference
+                reference_type = None
+                participant_patient_id = None
+                participant_practitioner_id = None
+                
+                individual = participant.get("individual")
+                if individual and individual.get("reference"):
+                    ref_parts = individual["reference"].split("/")
+                    if len(ref_parts) == 2:
+                        resource_type, resource_id = ref_parts
+                        try:
+                            # Convert resource_id to int
+                            resource_id_int = int(resource_id)
+                            if resource_type == "Patient":
+                                reference_type = ParticipantReferenceType.PATIENT
+                                participant_patient_id = resource_id_int
+                            elif resource_type == "Practitioner":
+                                reference_type = ParticipantReferenceType.PRACTITIONER
+                                participant_practitioner_id = resource_id_int
+                        except ValueError:
+                            # Skip invalid IDs
+                            pass
+                
+                participant_period = participant.get("period", {})
+                participant_period_start = participant_period.get("start") if isinstance(participant_period, dict) else None
+                participant_period_end = participant_period.get("end") if isinstance(participant_period, dict) else None
+                
+                # Parse datetime strings
+                if participant_period_start and isinstance(participant_period_start, str):
+                    participant_period_start = datetime.fromisoformat(participant_period_start.replace('Z', '+00:00'))
+                if participant_period_end and isinstance(participant_period_end, str):
+                    participant_period_end = datetime.fromisoformat(participant_period_end.replace('Z', '+00:00'))
                 
                 db_participant = EncounterParticipant(
                     type_text=type_text,
-                    individual_reference=participant.individual.reference if participant.individual else None,
-                    period_start=participant.period.start if participant.period else None,
-                    period_end=participant.period.end if participant.period else None,
+                    reference_type=reference_type,
+                    patient_id=participant_patient_id,
+                    practitioner_id=participant_practitioner_id,
+                    period_start=participant_period_start,
+                    period_end=participant_period_end,
                     encounter=db_encounter
                 )
-        
-        # Map Diagnoses
-        if encounter.diagnosis:
-            for diagnosis in encounter.diagnosis:
-                db_diagnosis = EncounterDiagnosis(
-                    condition_reference=diagnosis.condition.reference if diagnosis.condition else None,
-                    use_text=diagnosis.use.text if diagnosis.use else None,
-                    rank=str(diagnosis.rank) if diagnosis.rank else None,
-                    encounter=db_encounter
-                )
-        
-        # Map Locations
-        if encounter.location:
-            for location in encounter.location:
-                db_location = EncounterLocation(
-                    location_reference=location.location.reference if location.location else None,
-                    status=location.status,
-                    period_start=location.period.start if location.period else None,
-                    period_end=location.period.end if location.period else None,
-                    encounter=db_encounter
-                )
-        
+                
         # Map Reason Codes
-        if encounter.reasonCode:
-            for reason_code in encounter.reasonCode:
-                for coding in (reason_code.coding or []):
+        reason_codes = encounter_data.get("reasonCode", [])
+        if reason_codes and isinstance(reason_codes, list):
+            for reason in reason_codes:
+                coding_list = reason.get("coding", [])
+                for coding in coding_list:
                     db_reason = EncounterReasonCode(
-                        coding_system=coding.system,
-                        coding_code=coding.code,
-                        coding_display=coding.display,
-                        text=reason_code.text,
+                        coding_system=coding.get("system"),
+                        coding_code=coding.get("code"),
+                        coding_display=coding.get("display"),
+                        text=reason.get("text"),
                         encounter=db_encounter
                     )
-
-        try:
-            self.session.add(db_encounter)
-            await self.session.commit()
-        except Exception:
-            await self.session.rollback()
-            raise
+                
+        # Map Locations
+        locations = encounter_data.get("location", [])
+        if locations and isinstance(locations, list):
+            for location in locations:
+                location_ref = location.get("location", {})
+                location_period = location.get("period", {})
+                
+                location_period_start = location_period.get("start") if isinstance(location_period, dict) else None
+                location_period_end = location_period.get("end") if isinstance(location_period, dict) else None
+                
+                # Parse datetime strings
+                if location_period_start and isinstance(location_period_start, str):
+                    location_period_start = datetime.fromisoformat(location_period_start.replace('Z', '+00:00'))
+                if location_period_end and isinstance(location_period_end, str):
+                    location_period_end = datetime.fromisoformat(location_period_end.replace('Z', '+00:00'))
+                
+                db_location = EncounterLocation(
+                    location_reference=location_ref.get("reference") if isinstance(location_ref, dict) else None,
+                    status=location.get("status"),
+                    period_start=location_period_start,
+                    period_end=location_period_end,
+                    encounter=db_encounter
+                )
+                
+        # Map Diagnosis
+        diagnoses = encounter_data.get("diagnosis", [])
+        if diagnoses and isinstance(diagnoses, list):
+            for diagnosis in diagnoses:
+                condition = diagnosis.get("condition", {})
+                use_data = diagnosis.get("use", {})
+                
+                db_diagnosis = EncounterDiagnosis(
+                    condition_reference=condition.get("reference") if isinstance(condition, dict) else None,
+                    use_text=use_data.get("text") if isinstance(use_data, dict) else None,
+                    rank=diagnosis.get("rank"),
+                    encounter=db_encounter
+                )
         
-        return await self.get(encounter.id)
+        self.session.add(db_encounter)
+        await self.session.commit()
+        await self.session.refresh(db_encounter)
+        
+        return await self.get(db_encounter.id)
 
-    async def get(self, encounter_id: str) -> Optional[Encounter]:
+    async def get(self, encounter_id: int) -> Optional[Encounter]:
         stmt = (
             select(EncounterModel)
             .where(EncounterModel.id == encounter_id)
@@ -129,7 +218,7 @@ class EncounterRepository:
         db_encounters = result.scalars().all()
         return [self._map_to_fhir(e) for e in db_encounters]
 
-    async def delete(self, encounter_id: str) -> bool:
+    async def delete(self, encounter_id: int) -> bool:
         stmt = select(EncounterModel).where(EncounterModel.id == encounter_id)
         result = await self.session.execute(stmt)
         db_encounter = result.scalars().first()
@@ -148,7 +237,7 @@ class EncounterRepository:
     def _map_to_fhir(self, db_encounter: EncounterModel) -> Encounter:
         encounter_data = {
             "resourceType": "Encounter",
-            "id": db_encounter.id,
+            "id": str(db_encounter.id),  # Convert int to str for FHIR
             "status": db_encounter.status,
             "type": [],
             "participant": [],
@@ -161,9 +250,9 @@ class EncounterRepository:
         if db_encounter.class_code:
             encounter_data["class"] = {"code": db_encounter.class_code}
         
-        # Map subject
-        if db_encounter.subject_reference:
-            encounter_data["subject"] = {"reference": db_encounter.subject_reference}
+        # Map subject (Patient reference)
+        if db_encounter.patient_id:
+            encounter_data["subject"] = {"reference": f"Patient/{db_encounter.patient_id}"}
         
         # Map period
         if db_encounter.period_start or db_encounter.period_end:
@@ -190,8 +279,13 @@ class EncounterRepository:
         # Map participants
         for participant in db_encounter.participants:
             participant_data = {}
-            if participant.individual_reference:
-                participant_data["individual"] = {"reference": participant.individual_reference}
+            
+            # Reconstruct individual reference from reference_type and foreign keys
+            if participant.reference_type == ParticipantReferenceType.PATIENT and participant.patient_id:
+                participant_data["individual"] = {"reference": f"Patient/{participant.patient_id}"}
+            elif participant.reference_type == ParticipantReferenceType.PRACTITIONER and participant.practitioner_id:
+                participant_data["individual"] = {"reference": f"Practitioner/{participant.practitioner_id}"}
+            
             if participant.type_text:
                 participant_data["type"] = [{"text": t} for t in participant.type_text.split(",")]
             if participant.period_start or participant.period_end:
@@ -248,4 +342,5 @@ class EncounterRepository:
         # Remove empty lists
         encounter_data = {k: v for k, v in encounter_data.items() if v != [] and v is not None}
         
-        return Encounter.model_validate(encounter_data)
+        # return Encounter.model_validate(encounter_data)
+        return encounter_data

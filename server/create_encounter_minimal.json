@@ -1,0 +1,19 @@
+{
+  "_comment": "MINIMAL Encounter - Update Patient/1 and Practitioner/1 with actual IDs from your database",
+
+  "resourceType": "Encounter",
+  "status": "finished",
+  "class": {
+    "code": "AMB"
+  },
+  "subject": {
+    "reference": "Patient/1"
+  },
+  "participant": [
+    {
+      "individual": {
+        "reference": "Practitioner/1"
+      }
+    }
+  ]
+}
