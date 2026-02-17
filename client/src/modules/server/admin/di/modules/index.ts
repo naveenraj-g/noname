@@ -1,0 +1,9 @@
+export { AppModule } from "./app.module";
+export { AppMenuItemModule } from "./appMenuItem.module";
+export { OrganizationModule } from "./organization.module";
+export { RoleModule } from "./role.module";
+export { OrganizationAppModule } from "./organizationApp.module";
+export { OrganizationMemberModule } from "./organizationMember.module";
+export { RoleAppMenuItemModule } from "./roleAppMenuItem.module";
+export { RbacModule } from "./rbac.module";
+export { PreferenceTemplateModule } from "./preferenceTemplate.module";

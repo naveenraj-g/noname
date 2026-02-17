@@ -1,0 +1,62 @@
+{
+  "resourceType": "Practitioner",
+  "active": true,
+  "identifier": [
+    {
+      "system": "http://hospital.goodhealth.com/practitioners",
+      "value": "PRAC-789456",
+      "use": "official"
+    }
+  ],
+  "name": [
+    {
+      "use": "official",
+      "family": "Smith",
+      "given": ["Jane", "Marie"],
+      "prefix": ["Dr."],
+      "text": "Dr. Jane Marie Smith"
+    }
+  ],
+  "telecom": [
+    {
+      "system": "phone",
+      "value": "+1-555-987-6543",
+      "use": "work",
+      "rank": 1
+    },
+    {
+      "system": "email",
+      "value": "dr.smith@hospital.com",
+      "use": "work"
+    }
+  ],
+  "gender": "female",
+  "birthDate": "1978-03-15",
+  "address": [
+    {
+      "use": "work",
+      "type": "physical",
+      "line": ["456 Hospital Drive", "Suite 200"],
+      "city": "Boston",
+      "state": "MA",
+      "postalCode": "02101",
+      "country": "USA"
+    }
+  ],
+  "qualification": [
+    {
+      "identifier": [
+        {
+          "system": "http://medical.board.org",
+          "value": "MD-123456"
+        }
+      ],
+      "code": {
+        "text": "MD - Doctor of Medicine"
+      },
+      "issuer": {
+        "display": "American Board of Medical Specialties"
+      }
+    }
+  ]
+}

@@ -1,0 +1,157 @@
+{
+  "landing": {
+    "hero": {
+      "title": "The Future of Intelligent Healthcare",
+      "description": "Dr. Godly is a secure, AI-powered platform that streamlines patient intake, enhances consultations, and empowers both doctors and patients.",
+      "buttons": {
+        "signin": "Sign In",
+        "signup": "Sign Up",
+        "openApp": "Open App"
+      }
+    },
+    "features": {
+      "title": "A Smarter Healthcare Experience",
+      "description": "Dr. Godly brings together cutting-edge technology to create a seamless and intelligent healthcare ecosystem for everyone involved.",
+      "items": [
+        {
+          "title": "AI-Powered Intake",
+          "description": "Our conversational AI gathers comprehensive patient data before visits, creating smart summaries for doctors."
+        },
+        {
+          "title": "Seamless Scheduling",
+          "description": "Easily find doctors, book appointments, and integrate with your personal calendar in just a few clicks."
+        },
+        {
+          "title": "Secure Telemedicine",
+          "description": "Engage in high-quality, secure virtual consultations with AI-powered clinical decision support."
+        },
+        {
+          "title": "Unified Health Records",
+          "description": "Securely upload, store, and manage all your medical records in one place with our FileNest service."
+        },
+        {
+          "title": "Doctor & Patient Portals",
+          "description": "Dedicated, intuitive dashboards for both patients and doctors to manage their healthcare journey."
+        },
+        {
+          "title": "Compliance & Security",
+          "description": "Built on a foundation of security, compliant with HIPAA, GDPR, and other major healthcare standards."
+        }
+      ]
+    },
+    "howItWorks": {
+      "title": "Simple Steps to Better Care",
+      "description": "We’ve designed a straightforward process to make your healthcare journey as smooth as possible.",
+      "steps": [
+        {
+          "title": "Sign Up & AI Intake",
+          "description": "Patients create an account and interact with our friendly AI to provide their medical history and current symptoms."
+        },
+        {
+          "title": "Doctor Review",
+          "description": "Your doctor receives an AI-generated, concise pre-visit summary, allowing for a more prepared and focused consultation."
+        },
+        {
+          "title": "Virtual Consultation",
+          "description": "Connect with your doctor through a secure, high-quality video call, enhanced with real-time AI clinical support tools."
+        },
+        {
+          "title": "Automated Follow-up",
+          "description": "AI assists in generating SOAP notes, prescriptions, and follow-up instructions, ensuring clarity and continuity of care."
+        }
+      ]
+    },
+    "benefits": {
+      "patients": {
+        "title": "Empowering Patients",
+        "description": "Take control of your health with a platform designed around you. Experience convenience, clarity, and care like never before.",
+        "items": [
+          "Save time with automated pre-visit intake.",
+          "Receive more focused and prepared care.",
+          "Access doctors from the comfort of your home.",
+          "Manage all your medical data securely."
+        ]
+      },
+      "doctors": {
+        "title": "Optimizing for Doctors",
+        "description": "Focus on what matters most—your patients. Let our AI handle the administrative tasks and provide you with actionable insights.",
+        "items": [
+          "Reduce administrative workload significantly.",
+          "Access comprehensive patient summaries.",
+          "Conduct efficient and effective consultations.",
+          "Improve overall workflow and patient outcomes."
+        ]
+      }
+    },
+    "integrations": {
+      "title": "Secure, Compliant, and Reliable",
+      "description": "We are built on a modern, secure technology stack and adhere to the highest industry standards for data privacy and security.",
+      "items": [
+        { "name": "HIPAA Compliant", "icon": "HIPAA" },
+        { "name": "GDPR Compliant", "icon": "GDPR" },
+        { "name": "ABDM Compliant", "icon": "ABDM" },
+        { "name": "DPDPA Compliant", "icon": "DPDPA" }
+      ]
+    },
+    "testimonials": {
+      "title": "Trusted by Patients and Professionals",
+      "description": "Hear what people are saying about their experience with Dr. Godly.",
+      "items": [
+        {
+          "quote": "Dr. Godly's AI intake has saved me hours of paperwork each week. I can finally focus more on my patients.",
+          "name": "Dr. Anya Sharma",
+          "title": "General Practitioner"
+        },
+        {
+          "quote": "As a patient, booking appointments and managing my records has never been easier. The platform is so intuitive and secure.",
+          "name": "John Doe",
+          "title": "Patient"
+        },
+        {
+          "quote": "The seamless integration and AI-powered summaries are game-changers for our clinic. Patient outcomes have visibly improved.",
+          "name": "Maria Garcia",
+          "title": "Clinic Administrator"
+        }
+      ]
+    },
+    "cta": {
+      "title": "Ready to Transform Your Healthcare Experience?",
+      "description": "Join the growing number of forward-thinking healthcare providers and patients who are choosing a smarter, more efficient way to manage health.",
+      "buttons": {
+        "signup": "Sign Up",
+        "openApp": "Open App"
+      }
+    },
+    "footer": {
+      "brand": "Dr. Godly",
+      "tagline": "The future of intelligent, seamless, and secure healthcare.",
+      "product": {
+        "title": "Product",
+        "links": {
+          "features": "Features",
+          "forPatients": "For Patients",
+          "forDoctors": "For Doctors",
+          "pricing": "Pricing"
+        }
+      },
+      "company": {
+        "title": "Company",
+        "links": {
+          "about": "About Us",
+          "careers": "Careers",
+          "press": "Press",
+          "contact": "Contact"
+        }
+      },
+      "legal": {
+        "title": "Legal",
+        "links": {
+          "privacy": "Privacy Policy",
+          "terms": "Terms of Service",
+          "compliance": "Compliance"
+        }
+      },
+      "rights": "All rights reserved."
+    }
+  }
+}

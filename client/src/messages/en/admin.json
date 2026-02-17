@@ -1,0 +1,153 @@
+{
+  "admin": {
+    "manageApps": {
+      "title": "Manage Apps",
+      "subtitle": "Manage applications and their functionalities.",
+      "table": {
+        "label": "All Apps",
+        "addApp": "Add App",
+        "noApps": "No Apps Found",
+        "columns": {
+          "name": "Name",
+          "description": "Description",
+          "slug": "Slug",
+          "type": "Type",
+          "menuItems": "Menu Items",
+          "createdAt": "Created At"
+        },
+        "actions": {
+          "edit": "Edit",
+          "delete": "Delete"
+        }
+      }
+    },
+    "appMenuItems": {
+      "title": "Manage Menu Items",
+      "subtitle": "Manage application menu items and their functionality.",
+      "table": {
+        "label": "All Menu Items",
+        "addMenuItem": "Add Menu Item",
+        "noMenuItems": "No Menu Items Found",
+        "columns": {
+          "name": "Name",
+          "description": "Description",
+          "slug": "Slug",
+          "createdAt": "Created At"
+        },
+        "actions": {
+          "edit": "Edit",
+          "delete": "Delete"
+        }
+      }
+    },
+    "organizations": {
+      "title": "Manage Organizations",
+      "subtitle": "Manage organizations and their members.",
+      "table": {
+        "label": "All Organizations",
+        "addOrganization": "Add Organization",
+        "noOrganizations": "No Organizations Found",
+        "columns": {
+          "name": "Name",
+          "slug": "Slug",
+          "members": "Members",
+          "apps": "Apps",
+          "createdAt": "Created At"
+        },
+        "actions": {
+          "edit": "Edit",
+          "delete": "Delete"
+        }
+      }
+    },
+    "preferences": {
+      "title": "Manage Preference Templates",
+      "subtitle": "Manage default preference templates for different countries.",
+      "table": {
+        "label": "All Preference Templates",
+        "addTemplate": "Add Preference Template",
+        "noTemplates": "No Preference Templates Found",
+        "columns": {
+          "scope": "Scope",
+          "country": "Country",
+          "timezone": "Timezone",
+          "dateFormat": "Date Format",
+          "currency": "Currency",
+          "numberFormat": "Number Format",
+          "weekStart": "Week Start Day",
+          "createdAt": "Created At"
+        },
+        "actions": {
+          "edit": "Edit",
+          "delete": "Delete"
+        }
+      }
+    },
+    "manageRoles": {
+      "title": "Manage Roles",
+      "subtitle": "Define and control user access by creating and editing roles with specific permissions.",
+      "table": {
+        "label": "All Roles",
+        "addRole": "Add Role",
+        "noRoles": "No Roles Found",
+        "columns": {
+          "name": "Name",
+          "description": "Description",
+          "appMenus": "App Menus",
+          "createdAt": "Created At"
+        },
+        "actions": {
+          "edit": "Edit",
+          "delete": "Delete"
+        }
+      }
+    },
+    "rbac": {
+      "title": "RBAC (Role Based Access Control)",
+      "subtitle": "Manage user roles and permissions across your organization to control access to features and data.",
+      "map": {
+        "fields": {
+          "organization": {
+            "label": "Organization",
+            "placeholder": "Select Organization"
+          },
+          "user": {
+            "label": "Org Member",
+            "placeholder": "Select User"
+          },
+          "role": {
+            "label": "Role",
+            "placeholder": "Select Role"
+          }
+        },
+        "buttons": {
+          "map": "Map",
+          "mapping": "Mapping..."
+        },
+        "success": {
+          "mapped": "{role} role mapped successfully."
+        },
+        "errors": {
+          "loadFailed": "Failed to load organization members.",
+          "mapFailed": "Failed to map user role."
+        }
+      },
+      "table": {
+        "label": "RBAC Data",
+        "noData": "No Role Assignments Found",
+        "columns": {
+          "organization": "Organization",
+          "user": "User",
+          "role": "Role",
+          "createdAt": "Created At",
+          "action": "Action"
+        }
+      },
+      "unmap": {
+        "button": "Unmap",
+        "success": "{role} role unmapped successfully.",
+        "error": "Failed to unmap user role."
+      }
+    }
+  }
+}

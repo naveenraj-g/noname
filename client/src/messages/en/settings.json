@@ -1,0 +1,62 @@
+{
+  "settings": {
+    "UserPreferences": {
+      "title": "User Preferences",
+      "subtitle": "Customize how dates, times, and numbers are displayed",
+      "country": {
+        "title": "Country",
+        "description": "Configure your all fields based on your country"
+      },
+      "localization": {
+        "title": "Localization",
+        "description": "Configure your timezone and date/time formats"
+      },
+      "regional": {
+        "title": "Regional Settings",
+        "description": "Configure currency and measurement preferences"
+      },
+      "buttons": {
+        "save": "Save Preferences",
+        "reset": "Reset to Defaults"
+      },
+      "preview": {
+        "title": "Preview",
+        "description": "See how your preferences will format data",
+        "date": "Date",
+        "time": "Time",
+        "currency": "Currency",
+        "number": "Number"
+      },
+      "fields": {
+        "country": {
+          "label": "Country",
+          "placeholder": "Select Country"
+        },
+        "timezone": {
+          "label": "Timezone",
+          "placeholder": "Select Timezone"
+        },
+        "dateFormat": {
+          "label": "Date Format",
+          "placeholder": "Select Date Format"
+        },
+        "timeFormat": {
+          "label": "Time Format",
+          "placeholder": "Select Time Format"
+        },
+        "weekStart": {
+          "label": "Week Start Day",
+          "placeholder": "Select Week Start"
+        },
+        "currency": {
+          "label": "Currency",
+          "placeholder": "Select Currency"
+        },
+        "numberFormat": {
+          "label": "Number Format",
+          "placeholder": "Select Number Format"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "navbar": {
+    "brand": "Dr. Godly",
+    "features": "Features",
+    "howItWorks": "How It Works",
+    "testimonials": "Testimonials",
+    "signIn": "Sign In",
+    "signUp": "Sign Up",
+    "openApp": "Open App"
+  }
+}

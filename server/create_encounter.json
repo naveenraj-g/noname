@@ -1,0 +1,73 @@
+{
+  "resourceType": "Encounter",
+  "status": "finished",
+  "class": {
+    "code": "outpatient"
+  },
+  "type": [
+    {
+      "coding": [
+        {
+          "system": "http://snomed.info/sct",
+          "code": "185349003",
+          "display": "Consultation"
+        }
+      ],
+      "text": "Consultation"
+    }
+  ],
+  "subject": {
+    "reference": "Patient/12345",
+    "display": "John Doe"
+  },
+  "participant": [
+    {
+      "type": [
+        {
+          "text": "Primary Physician"
+        }
+      ],
+      "individual": {
+        "reference": "Practitioner/67890",
+        "display": "Dr. Jane Smith"
+      }
+    }
+  ],
+  "period": {
+    "start": "2024-01-15T09:00:00Z",
+    "end": "2024-01-15T09:30:00Z"
+  },
+  "reasonCode": [
+    {
+      "coding": [
+        {
+          "system": "http://snomed.info/sct",
+          "code": "25064002",
+          "display": "Headache"
+        }
+      ],
+      "text": "Headache"
+    }
+  ],
+  "diagnosis": [
+    {
+      "condition": {
+        "reference": "Condition/99999",
+        "display": "Migraine"
+      },
+      "use": {
+        "text": "Chief complaint"
+      },
+      "rank": 1
+    }
+  ],
+  "location": [
+    {
+      "location": {
+        "reference": "Location/room-3",
+        "display": "Exam Room 3"
+      },
+      "status": "completed"
+    }
+  ]
+}
