@@ -40,6 +40,7 @@ const appsList = [
     logo: "/app-icons/aihub.svg",
     patient: "/bezs/aihub/chat",
     doctor: "/bezs/aihub/chat",
+    ["application-admin"]: "/bezs/aihub/admin",
   },
 ];
 
