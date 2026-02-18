@@ -1,7 +1,0 @@
-fastapi[standard]
-fhir.resources
-SQLAlchemy
-asyncpg
-pydantic-settings
-orjson
-redis
