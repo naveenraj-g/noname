@@ -3,7 +3,7 @@
 import { EmptyState } from "@/modules/shared/components/EmptyState";
 import { AlertTriangle, Bot, Plus } from "lucide-react";
 import DataTable from "@/modules/shared/components/table/data-table";
-import { IAgentsProps } from "../../../types/admin/endpoints";
+import { IAgentsProps } from "../../../types/admin";
 import { useAiHubAdminStore } from "../../../stores/admin-store";
 import { agentsTableColumn } from "./agentsTableColumn";
 

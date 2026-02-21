@@ -12,9 +12,12 @@ import { buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { aiHubAdminStore } from "../../../stores/admin-store";
 import { formatSmartDate, formatStorage } from "@/modules/shared/helper";
-import { TEndpoint } from "../../../types/admin/endpoints";
+import { TEndpoint } from "../../../types/admin";
+import { TSharedUser } from "@/modules/shared/types";
 
-export const endpointsTableColumn: ColumnDef<TEndpoint>[] = [
+export const endpointsTableColumn = (
+  user: TSharedUser,
+): ColumnDef<TEndpoint>[] => [
   {
     header: ({ column }) => {
       const isSorted = column.getIsSorted();
@@ -92,6 +95,7 @@ export const endpointsTableColumn: ColumnDef<TEndpoint>[] = [
               onClick={() =>
                 openModal({
                   type: "editEndpoint",
+                  user,
                 })
               }
             >
@@ -105,6 +109,7 @@ export const endpointsTableColumn: ColumnDef<TEndpoint>[] = [
               onClick={() =>
                 openModal({
                   type: "deleteEndpoint",
+                  user,
                 })
               }
             >

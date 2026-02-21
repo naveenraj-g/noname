@@ -3,11 +3,15 @@
 import { EmptyState } from "@/modules/shared/components/EmptyState";
 import { AlertTriangle, Database, Plus } from "lucide-react";
 import DataTable from "@/modules/shared/components/table/data-table";
-import { IKnowledgeBaseProps } from "../../../types/admin/endpoints";
+import { IKnowledgeBaseProps } from "../../../types/admin";
 import { useAiHubAdminStore } from "../../../stores/admin-store";
 import { knowledgeBaseTableColumn } from "./knowledgeBaseTableColumn";
 
-function KnowledgeBaseTable({ knowledgeBase, error }: IKnowledgeBaseProps) {
+function KnowledgeBaseTable({
+  knowledgeBase,
+  error,
+  user,
+}: IKnowledgeBaseProps) {
   const openModal = useAiHubAdminStore((state) => state.onOpen);
 
   if (error) {
@@ -31,7 +35,7 @@ function KnowledgeBaseTable({ knowledgeBase, error }: IKnowledgeBaseProps) {
         buttonLabel="Create Knowledge Base"
         buttonIcon={<Plus />}
         buttonOnClick={() => {
-          openModal({ type: "createKnowledgeBase" });
+          openModal({ type: "createKnowledgeBase", user });
         }}
       />
     );
@@ -39,7 +43,7 @@ function KnowledgeBaseTable({ knowledgeBase, error }: IKnowledgeBaseProps) {
 
   return (
     <DataTable
-      columns={knowledgeBaseTableColumn}
+      columns={knowledgeBaseTableColumn(user)}
       data={knowledgeBase ?? []}
       dataSize={knowledgeBase?.length ?? 0}
       label="Knowledge Base"
@@ -49,6 +53,7 @@ function KnowledgeBaseTable({ knowledgeBase, error }: IKnowledgeBaseProps) {
       openModal={() => {
         openModal({
           type: "createKnowledgeBase",
+          user,
         });
       }}
     />

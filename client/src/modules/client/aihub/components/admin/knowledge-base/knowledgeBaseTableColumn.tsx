@@ -9,12 +9,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { aiHubAdminStore } from "../../../stores/admin-store";
-import { formatSmartDate, formatStorage } from "@/modules/shared/helper";
-import { TKnowledgeBase } from "../../../types/admin/endpoints";
+import { formatSmartDate } from "@/modules/shared/helper";
+import { TKnowledgeBase } from "../../../types/admin";
+import { TSharedUser } from "@/modules/shared/types";
 
-export const knowledgeBaseTableColumn: ColumnDef<TKnowledgeBase>[] = [
+export const knowledgeBaseTableColumn = (
+  user: TSharedUser,
+): ColumnDef<TKnowledgeBase>[] => [
   {
     header: ({ column }) => {
       const isSorted = column.getIsSorted();
@@ -72,6 +74,7 @@ export const knowledgeBaseTableColumn: ColumnDef<TKnowledgeBase>[] = [
               onClick={() =>
                 openModal({
                   type: "editKnowledgeBase",
+                  user,
                 })
               }
             >
@@ -85,6 +88,7 @@ export const knowledgeBaseTableColumn: ColumnDef<TKnowledgeBase>[] = [
               onClick={() =>
                 openModal({
                   type: "deleteKnowledgeBase",
+                  user,
                 })
               }
             >

@@ -12,7 +12,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { aiHubAdminStore } from "../../../stores/admin-store";
 import { formatSmartDate, formatStorage } from "@/modules/shared/helper";
-import { TAgent } from "../../../types/admin/endpoints";
+import { TAgent } from "../../../types/admin";
 
 export const agentsTableColumn: ColumnDef<TAgent>[] = [
   {

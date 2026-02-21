@@ -48,7 +48,7 @@ async function EndpointsPage() {
         <h1 className="text-2xl font-semibold">Endpoints</h1>
         <p className="text-sm">Manage API endpoints for custom agents</p>
       </div>
-      <EndpointsTable endpoints={mockEndpoints} error={null} />
+      <EndpointsTable endpoints={mockEndpoints} error={null} user={user} />
     </div>
   );
 }

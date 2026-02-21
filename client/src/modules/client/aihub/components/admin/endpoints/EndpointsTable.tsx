@@ -4,10 +4,10 @@ import { EmptyState } from "@/modules/shared/components/EmptyState";
 import { AlertTriangle, Link2, Plus } from "lucide-react";
 import DataTable from "@/modules/shared/components/table/data-table";
 import { endpointsTableColumn } from "./endpointsTableColumn";
-import { IEndpointsProps } from "../../../types/admin/endpoints";
+import { IEndpointsProps } from "../../../types/admin";
 import { useAiHubAdminStore } from "../../../stores/admin-store";
 
-function EndpointsTable({ endpoints, error }: IEndpointsProps) {
+function EndpointsTable({ endpoints, error, user }: IEndpointsProps) {
   const openModal = useAiHubAdminStore((state) => state.onOpen);
 
   if (error) {
@@ -31,7 +31,7 @@ function EndpointsTable({ endpoints, error }: IEndpointsProps) {
         buttonLabel="Add Endpoint"
         buttonIcon={<Plus />}
         buttonOnClick={() => {
-          openModal({ type: "createEndpoint" });
+          openModal({ type: "createEndpoint", user });
         }}
       />
     );
@@ -39,7 +39,7 @@ function EndpointsTable({ endpoints, error }: IEndpointsProps) {
 
   return (
     <DataTable
-      columns={endpointsTableColumn}
+      columns={endpointsTableColumn(user)}
       data={endpoints ?? []}
       dataSize={endpoints?.length ?? 0}
       label="Endpoints"
@@ -49,6 +49,7 @@ function EndpointsTable({ endpoints, error }: IEndpointsProps) {
       openModal={() => {
         openModal({
           type: "createEndpoint",
+          user,
         });
       }}
     />

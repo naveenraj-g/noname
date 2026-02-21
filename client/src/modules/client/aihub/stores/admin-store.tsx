@@ -1,4 +1,6 @@
 import { create } from "zustand";
+import { TEndpoint } from "../types/admin";
+import { TSharedUser } from "@/modules/shared/types";
 
 export type ModalType =
   | "createEndpoint"
@@ -16,9 +18,15 @@ interface AdminStoreModal {
   isOpen: boolean;
   trigger: number;
   triggerInModal: number;
+  endpointData?: TEndpoint;
+  user: TSharedUser | null;
   incrementTrigger: () => void;
   incrementInModalTrigger: () => void;
-  onOpen: (props: { type: ModalType }) => void;
+  onOpen: (props: {
+    type: ModalType;
+    endpointData?: TEndpoint;
+    user: TSharedUser;
+  }) => void;
   onClose: () => void;
 }
 
@@ -27,10 +35,13 @@ const _useAiHubAdminStore = create<AdminStoreModal>((set) => ({
   isOpen: false,
   trigger: 0,
   triggerInModal: 0,
-  onOpen: ({ type }) =>
+  user: null,
+  onOpen: ({ type, user, endpointData = undefined }) =>
     set({
       isOpen: true,
       type,
+      user,
+      endpointData,
     }),
   onClose: () =>
     set({
@@ -38,6 +49,8 @@ const _useAiHubAdminStore = create<AdminStoreModal>((set) => ({
       isOpen: false,
       trigger: 0,
       triggerInModal: 0,
+      user: null,
+      endpointData: undefined,
     }),
   incrementTrigger: () => set((state) => ({ trigger: state.trigger + 1 })),
   incrementInModalTrigger: () =>

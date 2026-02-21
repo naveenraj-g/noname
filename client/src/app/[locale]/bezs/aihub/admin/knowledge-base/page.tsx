@@ -54,7 +54,11 @@ async function KnowledgeBasePage() {
         <h1 className="text-2xl font-semibold">Knowledge Base</h1>
         <p className="text-sm">Manage knowledge bases for your AI agents</p>
       </div>
-      <KnowledgeBaseTable knowledgeBase={mockKnowledgeBases} error={null} />
+      <KnowledgeBaseTable
+        knowledgeBase={mockKnowledgeBases}
+        error={null}
+        user={user}
+      />
     </div>
   );
 }
