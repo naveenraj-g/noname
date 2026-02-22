@@ -1,20 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from fhir.resources.encounter import Encounter
-from app.core.database import get_fhir_db
-from app.repository.encounter_repository import EncounterRepository
 from app.services.encounter_service import EncounterService
 from typing import Dict, Any
-from app.auth.dependencies import get_current_user
+from app.di.dependencies.encounter import get_encounter_service
 
 router = APIRouter()
-
-
-async def get_encounter_service(
-    session: AsyncSession = Depends(get_fhir_db),
-) -> EncounterService:
-    repository = EncounterRepository(session)
-    return EncounterService(repository)
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
