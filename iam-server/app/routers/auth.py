@@ -64,6 +64,8 @@ async def login(
             password=body.password,
             grant_type="password",
         )
+
+        print(tokens["access_token"])
     except Exception as e:
         logger.warning("Login failed for user '%s': %s", body.username, str(e))
         raise HTTPException(
@@ -74,7 +76,7 @@ async def login(
     # Decode the access token to get user info
     public_key = await get_keycloak_public_key()
     try:
-        user_info = decode_token(tokens["access_token"], public_key)
+        user_info = decode_token(tokens["access_token"])
     except Exception as e:
         logger.error("Failed to decode token after successful login: %s", str(e))
         raise HTTPException(
@@ -83,18 +85,18 @@ async def login(
         )
 
     # Create a server-side session
-    session_id = await session_manager.create_session(user_info, tokens)
+    # session_id = await session_manager.create_session(user_info, tokens)
 
     # Set session cookie (httponly for security)
-    response.set_cookie(
-        key=settings.SESSION_COOKIE_NAME,
-        value=session_id,
-        httponly=True,
-        samesite="lax",
-        secure=settings.ENVIRONMENT != "development",
-        max_age=settings.SESSION_TTL_SECONDS,
-        path="/",
-    )
+    # response.set_cookie(
+    #     key=settings.SESSION_COOKIE_NAME,
+    #     value=session_id,
+    #     httponly=True,
+    #     samesite="lax",
+    #     secure=settings.ENVIRONMENT != "development",
+    #     max_age=settings.SESSION_TTL_SECONDS,
+    #     path="/",
+    # )
 
     logger.info("User '%s' logged in successfully", body.username)
     return AuthResponse(message="Login successful", user=_build_user_info(user_info))
@@ -174,10 +176,43 @@ async def refresh_tokens(
         path="/",
     )
 
-    return AuthResponse(message="Session refreshed successfully", user=_build_user_info(new_user_info))
+    return AuthResponse(
+        message="Session refreshed successfully", user=_build_user_info(new_user_info)
+    )
 
 
 @router.get("/me", response_model=AuthResponse)
 async def get_me(current_user: dict = Depends(get_current_user)):
     """Return the current authenticated user's info."""
     return AuthResponse(message="Authenticated", user=_build_user_info(current_user))
+
+
+@router.post("/token")
+async def login(
+    body: LoginRequest,
+):
+    try:
+        tokens = keycloak_openid.token(
+            username=body.username,
+            password=body.password,
+            grant_type="password",
+        )
+
+    except Exception as e:
+        logger.warning("Login failed for user '%s': %s", body.username, str(e))
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password",
+        )
+
+    try:
+        user_info = decode_token(tokens["access_token"])
+    except Exception as e:
+        logger.error("Failed to decode token after successful login: %s", str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Authentication succeeded but token validation failed",
+        )
+
+    logger.info("User '%s' logged in successfully", body.username)
+    return {"message": "Login successful", **tokens}

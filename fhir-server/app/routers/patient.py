@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fhir.resources.patient import Patient
 from app.services.patient_service import PatientService
 from app.schemas.patient import PatientCreateSchema
@@ -34,8 +34,11 @@ async def get_patient(
 
 @router.get("/", response_model=list[Patient])
 async def list_patients(
+    request: Request,
     patient_service: PatientService = Depends(get_patient_service),
 ):
+    user = request.state.user
+    # print(user)
     return await patient_service.list_patients()
 
 

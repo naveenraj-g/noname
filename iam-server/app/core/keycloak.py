@@ -38,15 +38,10 @@ async def get_keycloak_public_key() -> str:
     return "-----BEGIN PUBLIC KEY-----\n" f"{raw_key}\n" "-----END PUBLIC KEY-----"
 
 
-def decode_token(token: str, public_key: str) -> dict:
+def decode_token(token: str) -> dict:
     """Decode and validate a Keycloak access token.
 
     Returns the decoded token payload on success.
     Raises keycloak.exceptions.KeycloakAuthenticationError on failure.
     """
-    options = {
-        "verify_signature": True,
-        "verify_aud": False,  # Audience verification handled by Keycloak
-        "verify_exp": True,
-    }
-    return keycloak_openid.decode_token(token, key=public_key, options=options)
+    return keycloak_openid.decode_token(token, validate=True)

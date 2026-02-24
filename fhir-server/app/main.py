@@ -1,12 +1,13 @@
 from app.errors.handlers import application_error_handler, unhandled_exception_handler
 from app.errors.base import ApplicationError
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from contextlib import asynccontextmanager
 from app.routers import api_router
 from app.core.config import settings
 from app.core.redis import redis_client
 from app.core.logging import setup_logging, get_logger
 from app.di.container import Container
+from app.auth.dependencies import get_current_principal
 
 
 setup_logging()
@@ -48,7 +49,9 @@ app.container = container
 # app.add_exception_handler(ApplicationError, application_error_handler)
 # app.add_exception_handler(Exception, unhandled_exception_handler)
 
-app.include_router(api_router, prefix="/api/fhir/v1")
+app.include_router(
+    api_router, prefix="/api/fhir/v1", dependencies=[Depends(get_current_principal)]
+)
 
 
 @app.get("/health")
