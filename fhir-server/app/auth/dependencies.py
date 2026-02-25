@@ -1,7 +1,13 @@
-from fastapi import HTTPException, status, Request
+from fastapi import HTTPException, status, Request, Depends
 from jwt import PyJWKClient
 import jwt
 from app.core.config import settings
+import requests
+
+KEYCLOAK_TOKEN_URL = (
+    f"{settings.KEYCLOAK_URL}/realms/"
+    f"{settings.KEYCLOAK_REALM_NAME}/protocol/openid-connect/token"
+)
 
 JWKS_URL = f"{settings.KEYCLOAK_URL}/realms/{settings.KEYCLOAK_REALM_NAME}/protocol/openid-connect/certs"
 
@@ -34,16 +40,49 @@ def get_current_principal(request: Request):
 
     try:
         payload = decode_token(token)
-        if "preferred_username" in payload:
-            payload["principal_type"] = "user"
-        else:
-            payload["principal_type"] = "service"
+
+        payload["principal_type"] = (
+            "user" if "preferred_username" in payload else "service"
+        )
 
         # store in request state
         request.state.user = payload
-        # return payload
+        request.state.token = token
+
+        return payload
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
         )
+
+
+# Permission
+#   Resource = Patient
+#   Scope = read
+def check_permission(token: str, resource: str, scope: str):
+    response = requests.post(
+        KEYCLOAK_TOKEN_URL,
+        data={
+            "grant_type": "urn:ietf:params:oauth:grant-type:uma-ticket",
+            "audience": settings.KEYCLOAK_CLIENT_ID,
+            "permission": f"{resource}#{scope}",
+        },
+        headers={
+            "Authorization": f"Bearer {token}",
+        },
+    )
+
+    if response.status_code != 200:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied",
+        )
+
+
+def require_permission(resource: str, scope: str):
+    def dependency(request: Request):
+        token = request.state.token
+        check_permission(token, resource, scope)
+
+    return dependency

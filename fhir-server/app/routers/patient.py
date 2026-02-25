@@ -3,6 +3,7 @@ from fhir.resources.patient import Patient
 from app.services.patient_service import PatientService
 from app.schemas.patient import PatientCreateSchema
 from app.di.dependencies.patient import get_patient_service
+from app.auth.dependencies import require_permission
 
 router = APIRouter()
 
@@ -32,7 +33,11 @@ async def get_patient(
     return patient
 
 
-@router.get("/", response_model=list[Patient])
+@router.get(
+    "/",
+    response_model=list[Patient],
+    dependencies=[Depends(require_permission("patient", "read"))],
+)
 async def list_patients(
     request: Request,
     patient_service: PatientService = Depends(get_patient_service),
