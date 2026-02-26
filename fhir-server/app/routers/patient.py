@@ -8,7 +8,13 @@ from app.auth.dependencies import require_permission
 router = APIRouter()
 
 
-@router.post("/", response_model=Patient, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/",
+    response_model=Patient,
+    status_code=status.HTTP_201_CREATED,
+    operation_id="create_patient",
+    description="Create a new FHIR Patient resource and return the created resource.",
+)
 async def create_patient(
     payload: PatientCreateSchema,
     patient_service: PatientService = Depends(get_patient_service),
@@ -23,7 +29,12 @@ async def create_patient(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/{id}", response_model=Patient)
+@router.get(
+    "/{id}",
+    response_model=Patient,
+    operation_id="get_patient_by_id",
+    description="Retrieve a Patient resource by its internal database ID.",
+)
 async def get_patient(
     id: int, patient_service: PatientService = Depends(get_patient_service)
 ):
@@ -37,6 +48,9 @@ async def get_patient(
     "/",
     response_model=list[Patient],
     dependencies=[Depends(require_permission("patient", "read"))],
+    operation_id="list_patients",
+    description="Retrieve a list of all Patient resources. Requires patient:read permission.",
+    tags=["patient", "read"],
 )
 async def list_patients(
     request: Request,
@@ -47,7 +61,12 @@ async def list_patients(
     return await patient_service.list_patients()
 
 
-@router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    operation_id="delete_patient",
+    description="Delete a Patient resource by its internal database ID.",
+)
 async def delete_patient(
     id: int, patient_service: PatientService = Depends(get_patient_service)
 ):
