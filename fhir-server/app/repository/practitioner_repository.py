@@ -105,6 +105,110 @@ class PractitionerRepository:
             # Re-fetch to confirm and load relationships
             return await self.get(db_practitioner.id)
 
+    async def update(self, practitioner_id: int, practitioner: Practitioner) -> Optional[Practitioner]:
+        async with self.session_factory() as session:
+            stmt = (
+                select(PractitionerModel)
+                .where(PractitionerModel.id == practitioner_id)
+                .options(
+                    selectinload(PractitionerModel.identifiers),
+                    selectinload(PractitionerModel.names),
+                    selectinload(PractitionerModel.telecoms),
+                    selectinload(PractitionerModel.addresses),
+                    selectinload(PractitionerModel.qualifications),
+                )
+            )
+            result = await session.execute(stmt)
+            db_practitioner = result.scalars().first()
+
+            if not db_practitioner:
+                return None
+
+            # Delete existing child records
+            for child in db_practitioner.identifiers:
+                await session.delete(child)
+            for child in db_practitioner.names:
+                await session.delete(child)
+            for child in db_practitioner.telecoms:
+                await session.delete(child)
+            for child in db_practitioner.addresses:
+                await session.delete(child)
+            for child in db_practitioner.qualifications:
+                await session.delete(child)
+
+            # Update top-level fields
+            db_practitioner.active = practitioner.active
+            db_practitioner.gender = practitioner.gender
+            db_practitioner.birth_date = practitioner.birthDate
+
+            # Re-create child records via relationship collections
+            if practitioner.identifier:
+                for ident in practitioner.identifier:
+                    db_practitioner.identifiers.append(PractitionerIdentifier(
+                        system=ident.system,
+                        value=ident.value,
+                        use=ident.use,
+                    ))
+
+            if practitioner.name:
+                for name in practitioner.name:
+                    given_str = ",".join(name.given) if name.given else None
+                    prefix_str = ",".join(name.prefix) if name.prefix else None
+                    suffix_str = ",".join(name.suffix) if name.suffix else None
+                    db_practitioner.names.append(PractitionerName(
+                        use=name.use,
+                        family=name.family,
+                        given=given_str,
+                        text=name.text,
+                        prefix=prefix_str,
+                        suffix=suffix_str,
+                    ))
+
+            if practitioner.telecom:
+                for telecom in practitioner.telecom:
+                    db_practitioner.telecoms.append(PractitionerTelecom(
+                        system=telecom.system,
+                        value=telecom.value,
+                        use=telecom.use,
+                        rank=telecom.rank,
+                    ))
+
+            if practitioner.address:
+                for addr in practitioner.address:
+                    line_str = ",".join(addr.line) if addr.line else None
+                    db_practitioner.addresses.append(PractitionerAddress(
+                        use=addr.use,
+                        type=addr.type,
+                        text=addr.text,
+                        line=line_str,
+                        city=addr.city,
+                        district=addr.district,
+                        state=addr.state,
+                        postal_code=addr.postalCode,
+                        country=addr.country,
+                    ))
+
+            if practitioner.qualification:
+                for qual in practitioner.qualification:
+                    db_practitioner.qualifications.append(PractitionerQualification(
+                        identifier_system=(
+                            qual.identifier[0].system if qual.identifier else None
+                        ),
+                        identifier_value=(
+                            qual.identifier[0].value if qual.identifier else None
+                        ),
+                        code_text=qual.code.text if qual.code else None,
+                        issuer=qual.issuer.display if qual.issuer else None,
+                    ))
+
+            try:
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+
+            return await self.get(practitioner_id)
+
     async def get(self, practitioner_id: int) -> Optional[Practitioner]:
         async with self.session_factory() as session:
             stmt = (

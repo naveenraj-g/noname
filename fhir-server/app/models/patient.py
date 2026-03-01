@@ -31,15 +31,6 @@ class PatientModel(Base):
         "PatientAddress", back_populates="patient", cascade="all, delete-orphan"
     )
 
-    encounters = relationship(
-        "EncounterModel", back_populates="patient", cascade="all, delete-orphan"
-    )
-
-    encounter_participations = relationship(
-        "EncounterParticipant",
-        back_populates="patient",
-        foreign_keys="EncounterParticipant.patient_id",
-    )
 
 
 class PatientIdentifier(Base):

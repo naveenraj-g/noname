@@ -27,6 +27,18 @@ class Database:
     async def disconnect(self):
         await self.engine.dispose()
 
+    async def reset(self):
+        if settings.ENVIRONMENT == "production":
+            raise RuntimeError("Database reset is not allowed in production.")
+
+        logger.warning("Resetting database: dropping all tables...")
+
+        async with self.engine.begin() as conn:
+            await conn.run_sync(FHIRBase.metadata.drop_all)
+            await conn.run_sync(FHIRBase.metadata.create_all)
+
+        logger.warning("Database reset complete.")    
+
     @asynccontextmanager
     async def session(self) -> AsyncGenerator[AsyncSession, None]:
         session: AsyncSession = self.session_maker()

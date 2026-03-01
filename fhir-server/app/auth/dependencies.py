@@ -2,7 +2,8 @@ from fastapi import HTTPException, status, Request, Depends
 from jwt import PyJWKClient
 import jwt
 from app.core.config import settings
-import requests
+import httpx
+from app.errors.auth import AuthenticationError
 
 KEYCLOAK_TOKEN_URL = (
     f"{settings.KEYCLOAK_URL}/realms/"
@@ -27,51 +28,40 @@ def decode_token(token: str):
     )
 
 
-def get_current_principal(request: Request):
+async def get_current_user(request: Request):
     auth_header = request.headers.get("Authorization")
 
     if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing authentication token",
-        )
+        raise AuthenticationError("Missing authentication token")
 
     token = auth_header.split(" ")[1]
 
     try:
         payload = decode_token(token)
-
         payload["principal_type"] = (
             "user" if "preferred_username" in payload else "service"
         )
-
-        # store in request state
         request.state.user = payload
         request.state.token = token
-
         return payload
     except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-        )
+        raise AuthenticationError("Invalid or expired token")
 
 
 # Permission
 #   Resource = Patient
 #   Scope = read
-def check_permission(token: str, resource: str, scope: str):
-    response = requests.post(
-        KEYCLOAK_TOKEN_URL,
-        data={
-            "grant_type": "urn:ietf:params:oauth:grant-type:uma-ticket",
-            "audience": settings.KEYCLOAK_CLIENT_ID,
-            "permission": f"{resource}#{scope}",
-        },
-        headers={
-            "Authorization": f"Bearer {token}",
-        },
-    )
+async def check_permission(token: str, resource: str, scope: str):
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        response = await client.post(
+            KEYCLOAK_TOKEN_URL,
+            data={
+                "grant_type": "urn:ietf:params:oauth:grant-type:uma-ticket",
+                "audience": settings.KEYCLOAK_CLIENT_ID,
+                "permission": f"{resource}#{scope}",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
 
     if response.status_code != 200:
         raise HTTPException(
@@ -81,8 +71,9 @@ def check_permission(token: str, resource: str, scope: str):
 
 
 def require_permission(resource: str, scope: str):
-    def dependency(request: Request):
+    async def dependency(request: Request):
         token = request.state.token
-        check_permission(token, resource, scope)
+        await check_permission(token, resource, scope)
 
+    dependency.required_permission = f"{resource}:{scope}"
     return dependency

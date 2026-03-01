@@ -1,13 +1,25 @@
-from app.errors.handlers import application_error_handler, unhandled_exception_handler
+from app.errors.handlers import (
+    application_error_handler,
+    unhandled_exception_handler,
+    request_validation_exception_handler,
+    response_validation_exception_handler,
+    http_exception_handler,
+)
 from app.errors.base import ApplicationError
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi.exceptions import RequestValidationError, ResponseValidationError
 from contextlib import asynccontextmanager
 from app.routers import api_router
 from app.core.config import settings
 from app.core.redis import redis_client
 from app.core.logging import setup_logging, get_logger
 from app.di.container import Container
-from app.auth.dependencies import get_current_principal
+from app.middleware import (
+    RateLimitMiddleware,
+)
+from app.core.request_context import request_context_middleware
+from fastapi.responses import Response
+from app.auth.dependencies import get_current_user
 
 
 setup_logging()
@@ -43,17 +55,75 @@ async def lifespan(app: FastAPI):
     logger.info("Database engine disposed.")
 
 
-app = FastAPI(title="FHIR Server", lifespan=lifespan)
+app = FastAPI(
+    title="FHIR Server",
+    version="1.0.0",
+    description="""
+A FHIR R4-compliant REST API server for managing healthcare resources.
+
+This server provides CRUD operations for core FHIR resources including Patient,
+Practitioner, and Encounter. All resources are validated against the HL7 FHIR R4
+specification using the `fhir.resources` library.
+
+Designed for integration with AI agents via FastMCP dynamic tool generation.
+""",
+    openapi_tags=[
+        {
+            "name": "Patient",
+            "description": "Operations for managing FHIR Patient resources — individuals receiving care. Supports create, read, update, list, and delete.",
+        },
+        {
+            "name": "Practitioner",
+            "description": "Operations for managing FHIR Practitioner resources — healthcare providers such as physicians, nurses, and therapists. Supports create, read, update, list, and delete.",
+        },
+        {
+            "name": "Encounter",
+            "description": "Operations for managing FHIR Encounter resources — clinical interactions between patients and providers (visits, admissions, telehealth). Supports create, read, update, list, and delete.",
+        },
+    ],
+    lifespan=lifespan,
+)
+
+app.add_exception_handler(ApplicationError, application_error_handler)
+app.add_exception_handler(Exception, unhandled_exception_handler)
+app.add_exception_handler(RequestValidationError, request_validation_exception_handler)
+app.add_exception_handler(
+    ResponseValidationError, response_validation_exception_handler
+)
+app.add_exception_handler(HTTPException, http_exception_handler)
+
 app.container = container
 
-# app.add_exception_handler(ApplicationError, application_error_handler)
-# app.add_exception_handler(Exception, unhandled_exception_handler)
+app.add_middleware(RateLimitMiddleware)
+app.middleware("http")(request_context_middleware)
+
 
 app.include_router(
-    api_router, prefix="/api/fhir/v1", dependencies=[Depends(get_current_principal)]
+    api_router, prefix="/api/fhir/v1", dependencies=[Depends(get_current_user)]
 )
 
 
 @app.get("/health")
-async def health_check():
-    return {"status": "ok"}
+async def health_check(request: Request):
+    return {"status": "ok", "req_id": request.state.request_id}
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return Response(status_code=204)
+
+
+"""
+Common Mertics:
+ - CPU Usage
+ - Memory Usage
+ - Response Time
+ - Server Load
+ - Network Traffic
+ - Database Queries
+
+Observability:
+ - Logs
+ - Metrics
+ _ Traces
+"""

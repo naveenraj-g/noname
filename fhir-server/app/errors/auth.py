@@ -1,57 +1,21 @@
-from .base import ApplicationError
+from app.errors.base import ApplicationError
 
 
-class AuthError(ApplicationError):
-    def __init__(self, message: str, *, status_code=400, code="AUTH_ERROR", metadata=None):
+class AuthenticationError(ApplicationError):
+    def __init__(self, message="Authentication required"):
         super().__init__(
-            message,
-            status_code=status_code,
-            code=code,
-            metadata=metadata,
-            is_operational=True,
-        )
-
-
-class InvalidCredentialsError(AuthError):
-    def __init__(self):
-        super().__init__(
-            "Invalid email or password",
+            name="AuthenticationError",
+            message=message,
             status_code=401,
-            code="INVALID_CREDENTIALS",
+            code="AUTHENTICATION_ERROR",
         )
 
 
-class UserAlreadyExistsError(AuthError):
-    def __init__(self):
+class InvalidTokenError(ApplicationError):
+    def __init__(self, message="Invalid or malformed token"):
         super().__init__(
-            "An account with this email already exists",
-            status_code=409,
-            code="USER_ALREADY_EXISTS",
-        )
-
-
-class EmailNotVerifiedError(AuthError):
-    def __init__(self):
-        super().__init__(
-            "Please verify your email address to continue",
-            status_code=403,
-            code="EMAIL_NOT_VERIFIED",
-        )
-
-
-class SessionExpiredError(AuthError):
-    def __init__(self):
-        super().__init__(
-            "Your session has expired. Please sign in again.",
+            name="InvalidTokenError",
+            message=message,
             status_code=401,
-            code="SESSION_EXPIRED",
-        )
-
-
-class AccountNotFoundError(AuthError):
-    def __init__(self):
-        super().__init__(
-            "Account not found",
-            status_code=404,
-            code="ACCOUNT_NOT_FOUND",
+            code="INVALID_TOKEN",
         )

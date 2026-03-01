@@ -1,4 +1,3 @@
-from copy import Error
 from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.future import select
@@ -11,6 +10,8 @@ from app.models.patient import (
     PatientAddress,
 )
 from fhir.resources.patient import Patient
+from pydantic import ValidationError
+from app.errors.infrastructure import InfrastructureError
 
 
 class PatientRepository:
@@ -88,6 +89,99 @@ class PatientRepository:
 
             # Re-fetch to confirm and load relationships
             return await self.get(db_patient.id)
+
+    async def update(self, patient_id: int, patient: Patient) -> Optional[Patient]:
+        async with self.session_factory() as session:
+            stmt = (
+                select(PatientModel)
+                .where(PatientModel.id == patient_id)
+                .options(
+                    selectinload(PatientModel.identifiers),
+                    selectinload(PatientModel.names),
+                    selectinload(PatientModel.telecoms),
+                    selectinload(PatientModel.addresses),
+                )
+            )
+            result = await session.execute(stmt)
+            db_patient = result.scalars().first()
+
+            if not db_patient:
+                return None
+
+            # Delete existing child records
+            for child in db_patient.identifiers:
+                await session.delete(child)
+            for child in db_patient.names:
+                await session.delete(child)
+            for child in db_patient.telecoms:
+                await session.delete(child)
+            for child in db_patient.addresses:
+                await session.delete(child)
+
+            # Update top-level fields
+            db_patient.active = patient.active
+            db_patient.gender = patient.gender
+            db_patient.birth_date = patient.birthDate
+            db_patient.deceased_boolean = patient.deceasedBoolean
+
+            # Re-create child records via relationship collections
+            if patient.identifier:
+                for ident in patient.identifier:
+                    db_patient.identifiers.append(
+                        PatientIdentifier(
+                            system=ident.system,
+                            value=ident.value,
+                            use=ident.use,
+                        )
+                    )
+
+            if patient.name:
+                for name in patient.name:
+                    given_str = ",".join(name.given) if name.given else None
+                    db_patient.names.append(
+                        PatientName(
+                            use=name.use,
+                            family=name.family,
+                            given=given_str,
+                            text=name.text,
+                        )
+                    )
+
+            if patient.telecom:
+                for telecom in patient.telecom:
+                    db_patient.telecoms.append(
+                        PatientTelecom(
+                            system=telecom.system,
+                            value=telecom.value,
+                            use=telecom.use,
+                            rank=telecom.rank,
+                        )
+                    )
+
+            if patient.address:
+                for addr in patient.address:
+                    line_str = ",".join(addr.line) if addr.line else None
+                    db_patient.addresses.append(
+                        PatientAddress(
+                            use=addr.use,
+                            type=addr.type,
+                            text=addr.text,
+                            line=line_str,
+                            city=addr.city,
+                            district=addr.district,
+                            state=addr.state,
+                            postal_code=addr.postalCode,
+                            country=addr.country,
+                        )
+                    )
+
+            try:
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+
+            return await self.get(patient_id)
 
     async def get(self, patient_id: int) -> Optional[Patient]:
         async with self.session_factory() as session:
@@ -200,4 +294,10 @@ class PatientRepository:
             k: v for k, v in patient_data.items() if v != [] and v is not None
         }
 
-        return Patient.model_validate(patient_data)
+        try:
+            return Patient.model_validate(patient_data)
+        except ValidationError as e:
+            raise InfrastructureError(
+                message="Failed to map database entity to FHIR Patient",
+                cause=e,
+            )

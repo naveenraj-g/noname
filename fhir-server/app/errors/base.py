@@ -4,6 +4,7 @@ from typing import Optional, Dict, Any
 class ApplicationError(Exception):
     def __init__(
         self,
+        name: str,
         message: str,
         *,
         status_code: int = 500,
@@ -13,6 +14,7 @@ class ApplicationError(Exception):
         is_operational: bool = True,
     ):
         super().__init__(message)
+        self.name = name
         self.message = message
         self.status_code = status_code
         self.code = code

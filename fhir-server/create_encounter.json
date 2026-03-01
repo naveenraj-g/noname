@@ -1,12 +1,10 @@
 {
-  "_comment_instructions": "IMPORTANT: Before using this file, create a Patient and Practitioner first. Then update the ID references below with actual database IDs (e.g., Patient/1, Practitioner/1). This file follows FHIR R4 Encounter specification.",
+  "_comment": "Create a Patient and Practitioner first, then update the reference IDs below.",
 
   "resourceType": "Encounter",
   "status": "finished",
   "class": {
-    "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
-    "code": "AMB",
-    "display": "ambulatory"
+    "code": "AMB"
   },
   "type": [
     {
@@ -21,26 +19,17 @@
     }
   ],
   "subject": {
-    "reference": "Patient/1",
-    "display": "John Doe"
+    "reference": "Patient/1"
   },
   "participant": [
     {
       "type": [
         {
-          "coding": [
-            {
-              "system": "http://terminology.hl7.org/CodeSystem/v3-ParticipationType",
-              "code": "PPRF",
-              "display": "primary performer"
-            }
-          ],
           "text": "Primary Physician"
         }
       ],
       "individual": {
-        "reference": "Practitioner/1",
-        "display": "Dr. Jane Smith"
+        "reference": "Practitioner/1"
       }
     }
   ],
@@ -60,11 +49,21 @@
       "text": "Headache"
     }
   ],
+  "diagnosis": [
+    {
+      "condition": {
+        "reference": "Condition/1"
+      },
+      "use": {
+        "text": "Chief complaint"
+      },
+      "rank": 1
+    }
+  ],
   "location": [
     {
       "location": {
-        "reference": "Location/room-3",
-        "display": "Exam Room 3"
+        "reference": "Location/room-3"
       },
       "status": "completed"
     }

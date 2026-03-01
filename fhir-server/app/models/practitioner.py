@@ -40,11 +40,7 @@ class PractitionerModel(Base):
         cascade="all, delete-orphan",
     )
 
-    encounter_participations = relationship(
-        "EncounterParticipant",
-        back_populates="practitioner",
-        foreign_keys="EncounterParticipant.practitioner_id",
-    )
+
 
 
 class PractitionerIdentifier(Base):

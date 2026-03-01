@@ -1,8 +1,8 @@
-from sqlalchemy import Column, String, DateTime, ForeignKey, CheckConstraint, Enum, Integer
+from sqlalchemy import Column, String, DateTime, Integer, Enum, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import FHIRBase as Base
-from .enum import ParticipantReferenceType
+from app.models.enum import SubjectReferenceType, ParticipantReferenceType
 
 
 class EncounterModel(Base):
@@ -13,8 +13,12 @@ class EncounterModel(Base):
     class_code = Column(String, nullable=True)  # inpatient, outpatient, emergency, etc.
     priority = Column(String, nullable=True)
 
-    # subject_reference = Column(String, nullable=True)  # Reference to Patient (Patient/123)
-    patient_id = Column(Integer, ForeignKey("patient.id"), nullable=False, index=True)
+    # Subject reference — stored as type enum + integer ID
+    subject_type = Column(
+        Enum(SubjectReferenceType, name="subject_reference_type"),
+        nullable=True,
+    )
+    subject_id = Column(Integer, nullable=True)
 
     period_start = Column(DateTime(timezone=True), nullable=True)
     period_end = Column(DateTime(timezone=True), nullable=True)
@@ -39,16 +43,12 @@ class EncounterModel(Base):
         "EncounterReasonCode", back_populates="encounter", cascade="all, delete-orphan"
     )
 
-    patient = relationship("PatientModel", back_populates="encounters")
-
 
 class EncounterType(Base):
     __tablename__ = "encounter_type"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    encounter_id = Column(
-        Integer, ForeignKey("encounter.id"), nullable=False, index=True
-    )
+    encounter_id = Column(Integer, ForeignKey("encounter.id"), nullable=False, index=True)
 
     coding_system = Column(String, nullable=True)
     coding_code = Column(String, nullable=True)
@@ -63,63 +63,30 @@ class EncounterParticipant(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
 
-    encounter_id = Column(
-        Integer, ForeignKey("encounter.id"), nullable=False, index=True
-    )
+    encounter_id = Column(Integer, ForeignKey("encounter.id"), nullable=False, index=True)
 
     type_text = Column(
         String, nullable=True
     )  # e.g., "Primary Physician", "Consulting Physician"
 
-    # individual_reference = Column(
-    #     String, nullable=True
-    # )  # Reference to Practitioner (Practitioner/456)
-
+    # Individual reference — stored as type enum + integer ID
     reference_type = Column(
         Enum(ParticipantReferenceType, name="participant_reference_type"),
         nullable=True,
-    )  # Patient, Practitioner, etc.
-    # reference_id = Column(String, nullable=True)    # actual ID
-
-    patient_id = Column(Integer, ForeignKey("patient.id"), nullable=True)
-    practitioner_id = Column(Integer, ForeignKey("practitioner.id"), nullable=True)
+    )
+    individual_reference = Column(Integer, nullable=True)
 
     period_start = Column(DateTime(timezone=True), nullable=True)
     period_end = Column(DateTime(timezone=True), nullable=True)
 
     encounter = relationship("EncounterModel", back_populates="participants")
 
-    patient = relationship(
-        "PatientModel",
-        back_populates="encounter_participations",
-        foreign_keys=[patient_id],
-    )
-
-    practitioner = relationship(
-        "PractitionerModel",
-        back_populates="encounter_participations",
-        foreign_keys=[practitioner_id],
-    )
-
-    __table_args__ = (
-        CheckConstraint(
-            f"""
-    (reference_type = '{ParticipantReferenceType.PATIENT.value}' AND patient_id IS NOT NULL AND practitioner_id IS NULL)
-    OR
-    (reference_type = '{ParticipantReferenceType.PRACTITIONER.value}' AND practitioner_id IS NOT NULL AND patient_id IS NULL)
-    """,
-            name="valid_reference_type_constraint",
-        ),
-    )
-
 
 class EncounterDiagnosis(Base):
     __tablename__ = "encounter_diagnosis"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    encounter_id = Column(
-        Integer, ForeignKey("encounter.id"), nullable=False, index=True
-    )
+    encounter_id = Column(Integer, ForeignKey("encounter.id"), nullable=False, index=True)
 
     condition_reference = Column(
         String, nullable=True
@@ -136,9 +103,7 @@ class EncounterLocation(Base):
     __tablename__ = "encounter_location"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    encounter_id = Column(
-        Integer, ForeignKey("encounter.id"), nullable=False, index=True
-    )
+    encounter_id = Column(Integer, ForeignKey("encounter.id"), nullable=False, index=True)
 
     location_reference = Column(String, nullable=True)  # Reference to Location
     status = Column(String, nullable=True)  # planned, active, reserved, completed
@@ -152,9 +117,7 @@ class EncounterReasonCode(Base):
     __tablename__ = "encounter_reason_code"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    encounter_id = Column(
-        Integer, ForeignKey("encounter.id"), nullable=False, index=True
-    )
+    encounter_id = Column(Integer, ForeignKey("encounter.id"), nullable=False, index=True)
 
     coding_system = Column(String, nullable=True)
     coding_code = Column(String, nullable=True)
