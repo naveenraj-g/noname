@@ -2,14 +2,13 @@ import httpx
 import uvicorn
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
-
 from fastapi import FastAPI
 from fastmcp import FastMCP
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import ASGIApp, Receive, Scope, Send
-
 from app.core.config import settings
+from app.auth.decode_token import decode_token
 
 # ---------------------------------------------------------------------------
 # 1. ContextVar for per-request auth token (concurrency-safe)
@@ -57,7 +56,7 @@ mcp_app = mcp.http_app(path="/", transport="streamable-http")
 # ---------------------------------------------------------------------------
 class AuthForwardingMiddleware:
     """
-    ASGI middleware that reads the incoming Authorization header and stores it
+    ASGI (Asynchronous Server Gateway Interface) middleware that reads the incoming Authorization header and stores it
     in `current_token` so that BearerAuth can forward it to the FHIR backend.
     Returns 401 if the header is missing on MCP routes.
     """
@@ -75,12 +74,21 @@ class AuthForwardingMiddleware:
 
         # Only enforce auth on the /mcp endpoint
         if request.url.path.startswith("/mcp"):
-            if not auth_header:
+            if not auth_header or not auth_header.startswith("Bearer "):
                 response = Response("Missing Authorization header", status_code=401)
                 await response(scope, receive, send)
                 return
 
         # Set the token for the duration of this request
+        extracted_token = auth_header.split(" ")[1]
+
+        try:
+            decode_token(extracted_token)
+        except:
+            response = Response("Invalid or expired token", status_code=401)
+            await response(scope, receive, send)
+            return
+
         token = current_token.set(auth_header)
 
         try:
@@ -108,3 +116,5 @@ app.mount("/mcp", mcp_app)
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8002)
+
+# npx @modelcontextprotocol/inspector

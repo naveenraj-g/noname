@@ -5,6 +5,8 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     HTTP_CLIENT: str
     OPENAPI_SPEC: str
+    KEYCLOAK_URL: str
+    KEYCLOAK_REALM_NAME: str
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -417,12 +417,14 @@ source = { virtual = "." }
 dependencies = [
     { name = "fastapi", extra = ["standard"] },
     { name = "fastmcp" },
+    { name = "pyjwt" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "fastapi", extras = ["standard"], specifier = ">=0.133.1" },
     { name = "fastmcp", specifier = ">=3.0.2" },
+    { name = "pyjwt", specifier = ">=2.11.0" },
 ]
 
 [[package]]
