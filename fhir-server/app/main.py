@@ -39,7 +39,7 @@ async def lifespan(app: FastAPI):
     # In production, use Alembic migrations.
     if settings.ENVIRONMENT == "development":
         logger.info("Creating database tables (development mode)...")
-        await db.connect()
+        await db.reset()
         logger.info("Database tables ensured.")
 
     try:

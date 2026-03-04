@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Path
-from fhir.resources.patient import Patient
 from app.services.patient_service import PatientService
 from app.schemas.resources.patient import PatientCreateSchema, PatientResponseSchema
 from app.di.dependencies.patient import get_patient_service
@@ -14,6 +13,7 @@ router = APIRouter()
 @router.post(
     "/",
     response_model=PatientResponseSchema,
+    response_model_exclude_none=True,
     dependencies=[Depends(require_permission("patient", "create"))],
     status_code=status.HTTP_201_CREATED,
     operation_id="create_patient",
@@ -51,14 +51,7 @@ async def create_patient(
     payload: PatientCreateSchema,
     patient_service: PatientService = Depends(get_patient_service),
 ):
-    data_dict = payload.model_dump(exclude_none=True)
-    try:
-        validated_fhir_resource = Patient.model_validate(data_dict)
-        return await patient_service.create_patient(
-            validated_fhir_resource.model_dump()
-        )
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    return await patient_service.create_patient(payload)
 
 
 # ── Get Patient by ID ──────────────────────────────────────────────────
@@ -66,7 +59,8 @@ async def create_patient(
 
 @router.get(
     "/{id}",
-    response_model=Patient,
+    response_model=PatientResponseSchema,
+    response_model_exclude_none=True,
     dependencies=[Depends(require_permission("patient", "read"))],
     operation_id="get_patient_by_id",
     summary="Retrieve a Patient resource by ID",
@@ -106,7 +100,7 @@ async def get_patient(
 
 @router.get(
     "/",
-    response_model=list[Patient],
+    response_model=list[PatientResponseSchema],
     dependencies=[Depends(require_permission("patient", "read"))],
     operation_id="list_patients",
     summary="List all Patient resources",
@@ -141,7 +135,8 @@ async def list_patients(
 
 @router.put(
     "/{id}",
-    response_model=Patient,
+    response_model=PatientResponseSchema,
+    response_model_exclude_none=True,
     dependencies=[Depends(require_permission("patient", "update"))],
     operation_id="update_patient",
     summary="Update an existing Patient resource (full replacement)",
@@ -181,19 +176,10 @@ async def update_patient(
     ),
     patient_service: PatientService = Depends(get_patient_service),
 ):
-    data_dict = payload.model_dump(exclude_none=True)
-    try:
-        validated_fhir_resource = Patient.model_validate(data_dict)
-        result = await patient_service.update_patient(
-            id, validated_fhir_resource.model_dump()
-        )
-        if not result:
-            raise HTTPException(status_code=404, detail="Patient not found")
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    result = await patient_service.update_patient(id, payload)
+    if not result:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    return result
 
 
 # ── Delete Patient ─────────────────────────────────────────────────────

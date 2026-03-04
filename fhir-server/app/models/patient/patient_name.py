@@ -18,25 +18,25 @@ class PatientName(Base):
 
     given = relationship(
         "PatientNameGiven",
-        back_populates="name",
+        back_populates="human_name",
         cascade="all, delete-orphan",
     )
 
     prefix = relationship(
         "PatientNamePrefix",
-        back_populates="name",
+        back_populates="human_name",
         cascade="all, delete-orphan",
     )
 
     suffix = relationship(
         "PatientNameSuffix",
-        back_populates="name",
+        back_populates="human_name",
         cascade="all, delete-orphan",
     )
 
     period = relationship(
         "PatientNamePeriod",
-        back_populates="human_name",
+        back_populates="name",
         uselist=False,
         cascade="all, delete-orphan",
     )

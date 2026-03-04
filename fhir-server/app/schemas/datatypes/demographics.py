@@ -94,13 +94,12 @@ class HumanName(FHIRBaseModel):
         # Auto-generate text if missing
         if not self.text:
             parts = []
-        if self.given:
-            parts.extend(self.given)
-        if self.family:
-            parts.append(self.family)
-
-        if parts:
-            self.text = " ".join(parts)
+            if self.given:
+                parts.extend(self.given)
+            if self.family:
+                parts.append(self.family)
+            if parts:
+                self.text = " ".join(parts)
 
         return self
 

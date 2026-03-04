@@ -11,9 +11,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     def __init__(
         self,
         app,
-        read_limit: int = 1,
+        read_limit: int = 100,
         write_limit: int = 20,
-        window_seconds: int = 1,
+        window_seconds: int = 60,
     ):
         super().__init__(app)
         self.read_limit = read_limit
