@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Path
 from fhir.resources.patient import Patient
 from app.services.patient_service import PatientService
-from app.schemas.patient import PatientCreateSchema
+from app.schemas.resources.patient import PatientCreateSchema, PatientResponseSchema
 from app.di.dependencies.patient import get_patient_service
 from app.auth.dependencies import require_permission
 
@@ -13,7 +13,7 @@ router = APIRouter()
 
 @router.post(
     "/",
-    response_model=Patient,
+    response_model=PatientResponseSchema,
     dependencies=[Depends(require_permission("patient", "create"))],
     status_code=status.HTTP_201_CREATED,
     operation_id="create_patient",

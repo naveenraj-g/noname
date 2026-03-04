@@ -2,7 +2,7 @@ from sqlalchemy import Column, String, DateTime, Integer, Enum, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import FHIRBase as Base
-from app.models.enum import SubjectReferenceType, ParticipantReferenceType
+from app.models.enums import SubjectReferenceType, ParticipantReferenceType
 
 
 class EncounterModel(Base):
@@ -48,7 +48,9 @@ class EncounterType(Base):
     __tablename__ = "encounter_type"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    encounter_id = Column(Integer, ForeignKey("encounter.id"), nullable=False, index=True)
+    encounter_id = Column(
+        Integer, ForeignKey("encounter.id"), nullable=False, index=True
+    )
 
     coding_system = Column(String, nullable=True)
     coding_code = Column(String, nullable=True)
@@ -63,7 +65,9 @@ class EncounterParticipant(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
 
-    encounter_id = Column(Integer, ForeignKey("encounter.id"), nullable=False, index=True)
+    encounter_id = Column(
+        Integer, ForeignKey("encounter.id"), nullable=False, index=True
+    )
 
     type_text = Column(
         String, nullable=True
@@ -86,7 +90,9 @@ class EncounterDiagnosis(Base):
     __tablename__ = "encounter_diagnosis"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    encounter_id = Column(Integer, ForeignKey("encounter.id"), nullable=False, index=True)
+    encounter_id = Column(
+        Integer, ForeignKey("encounter.id"), nullable=False, index=True
+    )
 
     condition_reference = Column(
         String, nullable=True
@@ -103,7 +109,9 @@ class EncounterLocation(Base):
     __tablename__ = "encounter_location"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    encounter_id = Column(Integer, ForeignKey("encounter.id"), nullable=False, index=True)
+    encounter_id = Column(
+        Integer, ForeignKey("encounter.id"), nullable=False, index=True
+    )
 
     location_reference = Column(String, nullable=True)  # Reference to Location
     status = Column(String, nullable=True)  # planned, active, reserved, completed
@@ -117,7 +125,9 @@ class EncounterReasonCode(Base):
     __tablename__ = "encounter_reason_code"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    encounter_id = Column(Integer, ForeignKey("encounter.id"), nullable=False, index=True)
+    encounter_id = Column(
+        Integer, ForeignKey("encounter.id"), nullable=False, index=True
+    )
 
     coding_system = Column(String, nullable=True)
     coding_code = Column(String, nullable=True)

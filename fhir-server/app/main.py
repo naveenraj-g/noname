@@ -1,26 +1,28 @@
+from contextlib import asynccontextmanager
+from typing import Any, cast
+
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError, ResponseValidationError
+from fastapi.responses import Response
+
+from app.auth.dependencies import get_current_user
+from app.core.config import settings
+from app.core.logging import get_logger, setup_logging
+from app.core.redis import redis_client
+from app.core.request_context import request_context_middleware
+from app.di.container import Container
+from app.errors.base import ApplicationError
 from app.errors.handlers import (
     application_error_handler,
-    unhandled_exception_handler,
+    http_exception_handler,
     request_validation_exception_handler,
     response_validation_exception_handler,
-    http_exception_handler,
+    unhandled_exception_handler,
 )
-from app.errors.base import ApplicationError
-from fastapi import FastAPI, Depends, HTTPException, Request
-from fastapi.exceptions import RequestValidationError, ResponseValidationError
-from contextlib import asynccontextmanager
-from app.routers import api_router
-from app.core.config import settings
-from app.core.redis import redis_client
-from app.core.logging import setup_logging, get_logger
-from app.di.container import Container
 from app.middleware import (
     RateLimitMiddleware,
 )
-from app.core.request_context import request_context_middleware
-from fastapi.responses import Response
-from app.auth.dependencies import get_current_user
-
+from app.routers import api_router
 
 setup_logging()
 logger = get_logger(__name__)
@@ -41,7 +43,7 @@ async def lifespan(app: FastAPI):
         logger.info("Database tables ensured.")
 
     try:
-        await redis_client.ping()
+        await cast(Any, redis_client.ping())
         app.state.redis = redis_client
         logger.info("Connected to Redis successfully.")
     except Exception as e:
@@ -55,7 +57,7 @@ async def lifespan(app: FastAPI):
     logger.info("Database engine disposed.")
 
 
-app = FastAPI(
+app: FastAPI = FastAPI(
     title="FHIR Server",
     version="1.0.0",
     description="""
@@ -97,7 +99,6 @@ app.container = container
 app.add_middleware(RateLimitMiddleware)
 app.middleware("http")(request_context_middleware)
 
-
 app.include_router(
     api_router, prefix="/api/fhir/v1", dependencies=[Depends(get_current_user)]
 )
@@ -127,3 +128,4 @@ Observability:
  - Metrics
  _ Traces
 """
+# python.analysis.typeCheckingMode

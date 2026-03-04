@@ -1,23 +1,23 @@
 from typing import List, Optional, Literal
 from datetime import date, datetime, timezone
 from pydantic import Field, ConfigDict, model_validator
-
 from app.schemas.base import FHIRBaseModel
 from app.schemas.resources.base_resource import (
     FHIRCreateSchema,
     FHIRResponseSchema,
 )
-from app.schemas.datatypes.identifier import Identifier
-from app.schemas.datatypes.human_name import HumanName
-from app.schemas.datatypes.contact_point import ContactPoint
-from app.schemas.datatypes.address import Address
-from app.schemas.datatypes.codable_concept import CodeableConcept
-from app.schemas.datatypes.attachment import Attachment
-from app.schemas.datatypes.reference import Reference
-from app.schemas.datatypes.extension import Extension
+from app.schemas.datatypes import (
+    Identifier,
+    HumanName,
+    ContactPoint,
+    Address,
+    CodeableConcept,
+    Attachment,
+    Reference,
+    Extension,
+)
 
-from app.schemas.datatypes.enums.adminstrative import AdministrativeGender
-
+from app.schemas.enums import AdministrativeGender, PatientLinkType
 from app.schemas.resources.backbones.patient import (
     PatientContact,
     PatientCommunication,
@@ -125,24 +125,6 @@ class PatientBase(FHIRBaseModel):
         description="Languages the patient is able to communicate in.",
     )
 
-    generalPractitioner: Optional[List[Reference]] = Field(
-        None,
-        description=(
-            "Patient's nominated primary care provider. "
-            "May reference Practitioner, PractitionerRole, or Organization."
-        ),
-    )
-
-    managingOrganization: Optional[Reference] = Field(
-        None,
-        description="Organization that is responsible for maintaining this patient record.",
-    )
-
-    link: Optional[List[PatientLink]] = Field(
-        None,
-        description="Links to other Patient or RelatedPerson resources concerning the same individual.",
-    )
-
     extension: Optional[List[Extension]] = Field(
         None,
         title="Extension",
@@ -189,6 +171,45 @@ class PatientBase(FHIRBaseModel):
 # ─────────────────────────────────────────────────────────────
 
 
+class GeneralPractitionerRef(FHIRBaseModel):
+    """
+    Patient.generalPractitioner reference element.
+
+    Link to another resource (Practitioner | PractitionerRole | Organization).
+    """
+
+    refType: Literal["Practitioner", "PractitionerRole", "Organization"] = Field(
+        ..., description="Patient's nominated primary care provider reference type"
+    )
+
+    refId: int = Field(
+        ..., description="Patient's nominated primary care provider reference Id"
+    )
+
+
+class PatientLinkRef(FHIRBaseModel):
+    """
+    Patient.link backbone element.
+
+    Link to another patient or related person resource.
+    """
+
+    other_ref_type: Literal["Patient", "RelatedPerson"] = Field(
+        ...,
+        description="The other patient or related person resource reference type.",
+    )
+
+    other_ref_id: int = Field(
+        ...,
+        description="The other patient or related person resource reference Id.",
+    )
+
+    type: PatientLinkType = Field(
+        ...,
+        description="The type of link between this patient and the other resource.",
+    )
+
+
 class PatientCreateSchema(FHIRCreateSchema, PatientBase):
     """
     Schema used for creating a new Patient resource.
@@ -197,6 +218,23 @@ class PatientCreateSchema(FHIRCreateSchema, PatientBase):
     resourceType: Literal["Patient"] = Field(
         "Patient",
         description="FHIR resource type. Must always be 'Patient'.",
+    )
+
+    generalPractitioner: Optional[List[GeneralPractitionerRef]] = Field(
+        None,
+        description="Patient's nominated primary care provider. "
+        "May reference Practitioner, PractitionerRole, or Organization.",
+    )
+
+    managingOrganizationId: Optional[int] = Field(
+        None,
+        description="Organization Id that is responsible for maintaining this patient record.",
+        ge=1,
+    )
+
+    link: Optional[List[PatientLinkRef]] = Field(
+        None,
+        description="Links to other Patient or RelatedPerson resources concerning the same individual.",
     )
 
     model_config = ConfigDict(
@@ -263,6 +301,24 @@ class PatientResponseSchema(FHIRResponseSchema, PatientBase):
     resourceType: Literal["Patient"] = Field(
         "Patient",
         description="FHIR resource type.",
+    )
+
+    generalPractitioner: Optional[List[Reference]] = Field(
+        None,
+        description=(
+            "Patient's nominated primary care provider. "
+            "May reference Practitioner, PractitionerRole, or Organization."
+        ),
+    )
+
+    managingOrganization: Optional[Reference] = Field(
+        None,
+        description="Organization that is responsible for maintaining this patient record.",
+    )
+
+    link: Optional[List[PatientLink]] = Field(
+        None,
+        description="Links to other Patient or RelatedPerson resources concerning the same individual.",
     )
 
     model_config = ConfigDict(

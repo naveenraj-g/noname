@@ -1,15 +1,14 @@
 from typing import Optional, List
 from pydantic import Field, model_validator
 from app.schemas.base import FHIRBaseModel
-from app.schemas.datatypes.human_name import HumanName
-from app.schemas.datatypes.contact_point import ContactPoint
-from app.schemas.datatypes.address import Address
-from app.schemas.datatypes.period import Period
-from app.schemas.datatypes.reference import Reference
-from app.schemas.datatypes.codable_concept import CodeableConcept
-from app.schemas.datatypes.enums.adminstrative import AdministrativeGender
-
-from app.schemas.resources.enums.patient import PatientLinkType
+from app.schemas.datatypes import HumanName
+from app.schemas.datatypes import ContactPoint
+from app.schemas.datatypes import Address
+from app.schemas.datatypes import Period
+from app.schemas.datatypes import Reference
+from app.schemas.datatypes import CodeableConcept
+from app.schemas.enums import AdministrativeGender
+from app.schemas.enums import PatientLinkType
 
 
 class PatientContact(FHIRBaseModel):

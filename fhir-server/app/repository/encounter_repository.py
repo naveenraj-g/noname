@@ -10,7 +10,7 @@ from app.models.encounter import (
     EncounterLocation,
     EncounterReasonCode,
 )
-from app.models.enum import SubjectReferenceType, ParticipantReferenceType
+from app.models.enums import SubjectReferenceType, ParticipantReferenceType
 from fhir.resources.encounter import Encounter
 from datetime import datetime
 
@@ -29,7 +29,9 @@ class EncounterRepository:
 
             return await self.get(db_encounter.id)
 
-    async def update(self, encounter_id: int, encounter_data: dict) -> Optional[Encounter]:
+    async def update(
+        self, encounter_id: int, encounter_data: dict
+    ) -> Optional[Encounter]:
         async with self.session_factory() as session:
             stmt = (
                 select(EncounterModel)
@@ -68,17 +70,23 @@ class EncounterRepository:
             period_start = period.get("start") if isinstance(period, dict) else None
             period_end = period.get("end") if isinstance(period, dict) else None
             if period_start and isinstance(period_start, str):
-                period_start = datetime.fromisoformat(period_start.replace("Z", "+00:00"))
+                period_start = datetime.fromisoformat(
+                    period_start.replace("Z", "+00:00")
+                )
             if period_end and isinstance(period_end, str):
                 period_end = datetime.fromisoformat(period_end.replace("Z", "+00:00"))
 
             # Extract class_code
             class_data = encounter_data.get("class", {})
-            class_code = class_data.get("code") if isinstance(class_data, dict) else None
+            class_code = (
+                class_data.get("code") if isinstance(class_data, dict) else None
+            )
 
             # Extract priority
             priority_data = encounter_data.get("priority")
-            priority_text = priority_data.get("text") if isinstance(priority_data, dict) else None
+            priority_text = (
+                priority_data.get("text") if isinstance(priority_data, dict) else None
+            )
 
             # Update top-level fields
             db_encounter.status = encounter_data.get("status")
@@ -222,7 +230,9 @@ class EncounterRepository:
 
         # Extract priority
         priority_data = encounter_data.get("priority")
-        priority_text = priority_data.get("text") if isinstance(priority_data, dict) else None
+        priority_text = (
+            priority_data.get("text") if isinstance(priority_data, dict) else None
+        )
 
         # Create Encounter Model
         db_encounter = EncounterModel(
@@ -252,12 +262,14 @@ class EncounterRepository:
             for type_item in types:
                 coding_list = type_item.get("coding", [])
                 for coding in coding_list:
-                    db_encounter.types.append(EncounterType(
-                        coding_system=coding.get("system"),
-                        coding_code=coding.get("code"),
-                        coding_display=coding.get("display"),
-                        text=type_item.get("text"),
-                    ))
+                    db_encounter.types.append(
+                        EncounterType(
+                            coding_system=coding.get("system"),
+                            coding_code=coding.get("code"),
+                            coding_display=coding.get("display"),
+                            text=type_item.get("text"),
+                        )
+                    )
 
     def _add_participants(self, db_encounter: EncounterModel, encounter_data: dict):
         participants = encounter_data.get("participant", [])
@@ -286,7 +298,9 @@ class EncounterRepository:
                     else None
                 )
 
-                if participant_period_start and isinstance(participant_period_start, str):
+                if participant_period_start and isinstance(
+                    participant_period_start, str
+                ):
                     participant_period_start = datetime.fromisoformat(
                         participant_period_start.replace("Z", "+00:00")
                     )
@@ -295,13 +309,15 @@ class EncounterRepository:
                         participant_period_end.replace("Z", "+00:00")
                     )
 
-                db_encounter.participants.append(EncounterParticipant(
-                    type_text=type_text,
-                    reference_type=ref_type,
-                    individual_reference=ref_id,
-                    period_start=participant_period_start,
-                    period_end=participant_period_end,
-                ))
+                db_encounter.participants.append(
+                    EncounterParticipant(
+                        type_text=type_text,
+                        reference_type=ref_type,
+                        individual_reference=ref_id,
+                        period_start=participant_period_start,
+                        period_end=participant_period_end,
+                    )
+                )
 
     def _add_reason_codes(self, db_encounter: EncounterModel, encounter_data: dict):
         reason_codes = encounter_data.get("reasonCode", [])
@@ -309,12 +325,14 @@ class EncounterRepository:
             for reason in reason_codes:
                 coding_list = reason.get("coding", [])
                 for coding in coding_list:
-                    db_encounter.reason_codes.append(EncounterReasonCode(
-                        coding_system=coding.get("system"),
-                        coding_code=coding.get("code"),
-                        coding_display=coding.get("display"),
-                        text=reason.get("text"),
-                    ))
+                    db_encounter.reason_codes.append(
+                        EncounterReasonCode(
+                            coding_system=coding.get("system"),
+                            coding_code=coding.get("code"),
+                            coding_display=coding.get("display"),
+                            text=reason.get("text"),
+                        )
+                    )
 
     def _add_locations(self, db_encounter: EncounterModel, encounter_data: dict):
         locations = encounter_data.get("location", [])
@@ -343,16 +361,18 @@ class EncounterRepository:
                         location_period_end.replace("Z", "+00:00")
                     )
 
-                db_encounter.locations.append(EncounterLocation(
-                    location_reference=(
-                        location_ref.get("reference")
-                        if isinstance(location_ref, dict)
-                        else None
-                    ),
-                    status=location.get("status"),
-                    period_start=location_period_start,
-                    period_end=location_period_end,
-                ))
+                db_encounter.locations.append(
+                    EncounterLocation(
+                        location_reference=(
+                            location_ref.get("reference")
+                            if isinstance(location_ref, dict)
+                            else None
+                        ),
+                        status=location.get("status"),
+                        period_start=location_period_start,
+                        period_end=location_period_end,
+                    )
+                )
 
     def _add_diagnoses(self, db_encounter: EncounterModel, encounter_data: dict):
         diagnoses = encounter_data.get("diagnosis", [])
@@ -361,17 +381,21 @@ class EncounterRepository:
                 condition = diagnosis.get("condition", {})
                 use_data = diagnosis.get("use", {})
 
-                db_encounter.diagnoses.append(EncounterDiagnosis(
-                    condition_reference=(
-                        condition.get("reference")
-                        if isinstance(condition, dict)
-                        else None
-                    ),
-                    use_text=(
-                        use_data.get("text") if isinstance(use_data, dict) else None
-                    ),
-                    rank=str(diagnosis.get("rank")) if diagnosis.get("rank") is not None else None,
-                ))
+                db_encounter.diagnoses.append(
+                    EncounterDiagnosis(
+                        condition_reference=(
+                            condition.get("reference")
+                            if isinstance(condition, dict)
+                            else None
+                        ),
+                        use_text=(
+                            use_data.get("text") if isinstance(use_data, dict) else None
+                        ),
+                        rank=str(diagnosis.get("rank"))
+                        if diagnosis.get("rank") is not None
+                        else None,
+                    )
+                )
 
     # ── Helper: Map DB model to FHIR ──────────────────────────────────
 
@@ -385,9 +409,7 @@ class EncounterRepository:
 
         # Map class → List[CodeableConcept] in R5
         if db_encounter.class_code:
-            encounter_data["class"] = [
-                {"coding": [{"code": db_encounter.class_code}]}
-            ]
+            encounter_data["class"] = [{"coding": [{"code": db_encounter.class_code}]}]
 
         # Map subject — reconstruct FHIR reference from type + ID
         if db_encounter.subject_type and db_encounter.subject_id:
@@ -403,20 +425,26 @@ class EncounterRepository:
         if db_encounter.period_start or db_encounter.period_end:
             encounter_data["actualPeriod"] = {}
             if db_encounter.period_start:
-                encounter_data["actualPeriod"]["start"] = db_encounter.period_start.isoformat()
+                encounter_data["actualPeriod"]["start"] = (
+                    db_encounter.period_start.isoformat()
+                )
             if db_encounter.period_end:
-                encounter_data["actualPeriod"]["end"] = db_encounter.period_end.isoformat()
+                encounter_data["actualPeriod"]["end"] = (
+                    db_encounter.period_end.isoformat()
+                )
 
         # Map types
         type_list = []
         for type_item in db_encounter.types:
             type_data = {"coding": []}
             if type_item.coding_system or type_item.coding_code:
-                type_data["coding"].append({
-                    "system": type_item.coding_system,
-                    "code": type_item.coding_code,
-                    "display": type_item.coding_display,
-                })
+                type_data["coding"].append(
+                    {
+                        "system": type_item.coding_system,
+                        "code": type_item.coding_code,
+                        "display": type_item.coding_display,
+                    }
+                )
             if type_item.text:
                 type_data["text"] = type_item.text
             if type_data["coding"] or type_data.get("text"):
@@ -441,9 +469,13 @@ class EncounterRepository:
             if participant.period_start or participant.period_end:
                 participant_data["period"] = {}
                 if participant.period_start:
-                    participant_data["period"]["start"] = participant.period_start.isoformat()
+                    participant_data["period"]["start"] = (
+                        participant.period_start.isoformat()
+                    )
                 if participant.period_end:
-                    participant_data["period"]["end"] = participant.period_end.isoformat()
+                    participant_data["period"]["end"] = (
+                        participant.period_end.isoformat()
+                    )
             if participant_data:
                 participant_list.append(participant_data)
         if participant_list:
@@ -488,11 +520,13 @@ class EncounterRepository:
         for reason in db_encounter.reason_codes:
             concept = {"coding": []}
             if reason.coding_system or reason.coding_code:
-                concept["coding"].append({
-                    "system": reason.coding_system,
-                    "code": reason.coding_code,
-                    "display": reason.coding_display,
-                })
+                concept["coding"].append(
+                    {
+                        "system": reason.coding_system,
+                        "code": reason.coding_code,
+                        "display": reason.coding_display,
+                    }
+                )
             if reason.text:
                 concept["text"] = reason.text
             if concept["coding"] or concept.get("text"):

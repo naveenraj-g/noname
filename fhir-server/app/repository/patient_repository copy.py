@@ -2,53 +2,82 @@ from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
-from app.models.patient import PatientModel, PatientIdentifier
+from app.models.patient import (
+    PatientModel,
+    PatientName,
+    PatientIdentifier,
+    PatientTelecom,
+    PatientAddress,
+)
 from fhir.resources.patient import Patient
 from pydantic import ValidationError
 from app.errors.infrastructure import InfrastructureError
-from app.schemas.resources import PatientCreateSchema, PatientResponseSchema
 
 
 class PatientRepository:
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]):
         self.session_factory = session_factory
 
-    async def create(self, patient: PatientCreateSchema) -> PatientResponseSchema:
+    async def create(self, patient: Patient) -> Patient:
         async with self.session_factory() as session:
             # Create Patient Model
             db_patient = PatientModel(
                 active=patient.active,
-                name=patient.name,
-                telecom=patient.telecom,
                 gender=patient.gender,
                 birth_date=patient.birthDate,
                 deceased_boolean=patient.deceasedBoolean,
-                deceased_dateTime=patient.deceasedDateTime,
-                address=patient.address,
-                marital_status=patient.maritalStatus,
-                multiple_birth_boolean=patient.multipleBirthBoolean,
-                multiple_birth_integer=patient.multipleBirthInteger,
-                photo=patient.photo,
-                contact=patient.contact,
-                communication=patient.communication,
-                general_practitioner=patient.generalPractitioner,
-                managing_organization=patient.managingOrganization,
-                link=patient.link,
             )
 
             # Map Identifiers
             if patient.identifier:
                 for ident in patient.identifier:
-                    PatientIdentifier(
-                        use=ident.use,
-                        type=ident.type,
+                    db_ident = PatientIdentifier(
                         system=ident.system,
                         value=ident.value,
-                        period=ident.period,
-                        assigner=ident.assigner,
+                        use=ident.use,
                         patient=db_patient,
                     )
                     # No need to add to session explicitly if attached to patient
+
+            # Map Names
+            if patient.name:
+                for name in patient.name:
+                    given_str = ",".join(name.given) if name.given else None
+                    db_name = PatientName(
+                        use=name.use,
+                        family=name.family,
+                        given=given_str,
+                        text=name.text,
+                        patient=db_patient,
+                    )
+
+            # Map Telecoms
+            if patient.telecom:
+                for telecom in patient.telecom:
+                    db_telecom = PatientTelecom(
+                        system=telecom.system,
+                        value=telecom.value,
+                        use=telecom.use,
+                        rank=telecom.rank,
+                        patient=db_patient,
+                    )
+
+            # Map Addresses
+            if patient.address:
+                for addr in patient.address:
+                    line_str = ",".join(addr.line) if addr.line else None
+                    db_addr = PatientAddress(
+                        use=addr.use,
+                        type=addr.type,
+                        text=addr.text,
+                        line=line_str,
+                        city=addr.city,
+                        district=addr.district,
+                        state=addr.state,
+                        postal_code=addr.postalCode,
+                        country=addr.country,
+                        patient=db_patient,
+                    )
 
             try:
                 session.add(db_patient)
@@ -272,17 +301,3 @@ class PatientRepository:
                 message="Failed to map database entity to FHIR Patient",
                 cause=e,
             )
-
-
-def build_reference(resource_type, resource_id):
-    return {
-        "reference": f"{resource_type}/{resource_id}",
-        "type": resource_type,
-    }
-
-
-def build_patient_link(link):
-    return {
-        "other": build_reference(link.target_type, link.target_id),
-        "type": link.link_type,
-    }
