@@ -7,6 +7,7 @@ from fastapi.responses import Response
 
 from app.auth.dependencies import get_current_user
 from app.core.config import settings
+from app.core.database import Database
 from app.core.logging import get_logger, setup_logging
 from app.core.redis import redis_client
 from app.core.request_context import request_context_middleware
@@ -28,7 +29,7 @@ setup_logging()
 logger = get_logger(__name__)
 
 container = Container()
-db = container.core.database()
+db: Database = container.core.database()
 
 
 @asynccontextmanager
@@ -39,7 +40,7 @@ async def lifespan(app: FastAPI):
     # In production, use Alembic migrations.
     if settings.ENVIRONMENT == "development":
         logger.info("Creating database tables (development mode)...")
-        await db.reset()
+        await db.connect()
         logger.info("Database tables ensured.")
 
     try:
@@ -71,15 +72,15 @@ Designed for integration with AI agents via FastMCP dynamic tool generation.
 """,
     openapi_tags=[
         {
-            "name": "Patient",
+            "name": "Patients",
             "description": "Operations for managing FHIR Patient resources — individuals receiving care. Supports create, read, update, list, and delete.",
         },
         {
-            "name": "Practitioner",
+            "name": "Practitioners",
             "description": "Operations for managing FHIR Practitioner resources — healthcare providers such as physicians, nurses, and therapists. Supports create, read, update, list, and delete.",
         },
         {
-            "name": "Encounter",
+            "name": "Encounters",
             "description": "Operations for managing FHIR Encounter resources — clinical interactions between patients and providers (visits, admissions, telehealth). Supports create, read, update, list, and delete.",
         },
     ],

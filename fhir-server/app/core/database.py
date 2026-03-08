@@ -4,6 +4,7 @@ from app.core.config import settings
 from contextlib import asynccontextmanager
 from app.core.logging import get_logger
 from typing import AsyncGenerator
+from sqlalchemy import text
 
 logger = get_logger(__name__)
 
@@ -34,10 +35,12 @@ class Database:
         logger.warning("Resetting database: dropping all tables...")
 
         async with self.engine.begin() as conn:
+            # await conn.execute(text("DROP SCHEMA public CASCADE"))
+            # await conn.execute(text("CREATE SCHEMA public"))
             await conn.run_sync(FHIRBase.metadata.drop_all)
             await conn.run_sync(FHIRBase.metadata.create_all)
 
-        logger.warning("Database reset complete.")    
+        logger.warning("Database reset complete.")
 
     @asynccontextmanager
     async def session(self) -> AsyncGenerator[AsyncSession, None]:

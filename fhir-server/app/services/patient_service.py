@@ -17,7 +17,7 @@ class PatientService:
         return await self.repository.update(patient_id, patient)
 
     async def get_patient(self, patient_id: int) -> PatientResponseSchema:
-        return await self.repository.get(patient_id)
+        return await self.repository.get_by_id(patient_id)
 
     async def list_patients(self) -> list[PatientResponseSchema]:
         return await self.repository.list()

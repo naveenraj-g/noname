@@ -1,218 +1,74 @@
-from typing import List, Optional, Literal
-from datetime import date, datetime, timezone
-from pydantic import Field, ConfigDict, model_validator
+from datetime import date, datetime
+from typing import Optional
+from pydantic import Field, ConfigDict
+from typing_extensions import Literal
 from app.schemas.base import FHIRBaseModel
 from app.schemas.resources.base_resource import (
     FHIRCreateSchema,
     FHIRResponseSchema,
 )
-from app.schemas.datatypes import (
-    Identifier,
-    HumanName,
-    ContactPoint,
-    Address,
-    CodeableConcept,
-    Attachment,
-    Reference,
-    Extension,
-)
-
-from app.schemas.enums import AdministrativeGender, PatientLinkType
-from app.schemas.resources.backbones.patient import (
-    PatientContact,
-    PatientCommunication,
-    PatientLink,
-)
-
-
-# ─────────────────────────────────────────────────────────────
-# Shared Patient Fields
-# ─────────────────────────────────────────────────────────────
+from app.schemas.enums import AdministrativeGender
 
 
 class PatientBase(FHIRBaseModel):
     """
-    Core FHIR Patient resource fields.
-
-    Represents demographic, administrative, and contact information
-    for an individual receiving healthcare services.
+    Base schema containing common Patient attributes.
     """
 
-    identifier: Optional[List[Identifier]] = Field(
-        None,
-        description=(
-            "Business identifiers assigned to this patient. "
-            "Examples include Medical Record Number (MRN), "
-            "national ID, or insurance policy number."
-        ),
-    )
-
     active: Optional[bool] = Field(
-        True,
-        description="Whether this patient record is currently active.",
-        example=True,
+        None,
+        description="Whether the patient record is active.",
     )
 
-    name: Optional[List[HumanName]] = Field(
+    first_name: Optional[str] = Field(
         None,
-        description="Names associated with the patient (legal, maiden, nickname, etc.).",
+        description="Patient's given name.",
+        max_length=100,
     )
 
-    telecom: Optional[List[ContactPoint]] = Field(
+    middle_name: Optional[str] = Field(
         None,
-        description="Contact details such as phone numbers or email addresses.",
+        description="Patient's middle name.",
+        max_length=100,
+    )
+
+    last_name: Optional[str] = Field(
+        None,
+        description="Patient's family name.",
+        max_length=100,
     )
 
     gender: Optional[AdministrativeGender] = Field(
         None,
-        description="Administrative gender for record-keeping purposes.",
-        example="male",
+        description="Administrative gender of the patient.",
+        examples=["male", "female", "other", "unknown"],
     )
 
-    birthDate: Optional[date] = Field(
+    birth_date: Optional[date] = Field(
         None,
-        description="Date of birth in ISO 8601 format (YYYY-MM-DD).",
-        example="1985-04-12",
+        description="Date of birth of the patient.",
     )
 
-    deceasedBoolean: Optional[bool] = Field(
+    deceased_boolean: Optional[bool] = Field(
         None,
-        description="Indicates whether the patient is deceased.",
-        example=False,
+        description="Indicates if the patient is deceased.",
     )
 
-    deceasedDateTime: Optional[datetime] = Field(
+    deceased_dateTime: Optional[datetime] = Field(
         None,
-        description="Exact date and time of death if known.",
-        examples=["2024-01-10T18:00:00Z"],
+        description="Date and time of death if known.",
     )
 
-    address: Optional[List[Address]] = Field(
+    marital_status: Optional[str] = Field(
         None,
-        description="Addresses associated with the patient (home, work, billing).",
-    )
-
-    maritalStatus: Optional[CodeableConcept] = Field(
-        None,
-        description="Marital or civil status of the patient.",
-    )
-
-    multipleBirthBoolean: Optional[bool] = Field(
-        None,
-        description="Indicates if the patient was part of a multiple birth.",
-        example=True,
-    )
-
-    multipleBirthInteger: Optional[int] = Field(
-        None,
-        description="Birth order in a multiple birth (1 = first born).",
-        example=2,
-        ge=1,
-    )
-
-    photo: Optional[List[Attachment]] = Field(
-        None,
-        description="Photographic image of the patient.",
-    )
-
-    contact: Optional[List[PatientContact]] = Field(
-        None,
-        description="A contact party (guardian, partner, emergency contact).",
-    )
-
-    communication: Optional[List[PatientCommunication]] = Field(
-        None,
-        description="Languages the patient is able to communicate in.",
-    )
-
-    extension: Optional[List[Extension]] = Field(
-        None,
-        title="Extension",
-        description=(
-            "Additional information not part of the basic FHIR definition. "
-            "Used to represent extended elements such as birth time."
-        ),
-    )
-
-    # ─────────────────────────────────────────
-    # Validation Rules
-    # ─────────────────────────────────────────
-
-    @model_validator(mode="after")
-    def validate_patient_rules(self):
-        # Rule 1: deceasedBoolean XOR deceasedDateTime
-        if self.deceasedBoolean is not None and self.deceasedDateTime is not None:
-            raise ValueError(
-                "Only one of deceasedBoolean or deceasedDateTime may be provided."
-            )
-
-        # Rule 2: multipleBirthBoolean XOR multipleBirthInteger
-        if (
-            self.multipleBirthBoolean is not None
-            and self.multipleBirthInteger is not None
-        ):
-            raise ValueError(
-                "Only one of multipleBirthBoolean or multipleBirthInteger may be provided."
-            )
-
-        # Rule 3: birthDate cannot be in future
-        if self.birthDate and self.birthDate > date.today():
-            raise ValueError("birthDate cannot be in the future.")
-
-        # Rule 4: deceasedDateTime cannot be in future
-        if self.deceasedDateTime and self.deceasedDateTime > datetime.now(timezone.utc):
-            raise ValueError("deceasedDateTime cannot be in the future.")
-
-        return self
-
-
-# ─────────────────────────────────────────────────────────────
-# Create Schema
-# ─────────────────────────────────────────────────────────────
-
-
-class GeneralPractitionerRef(FHIRBaseModel):
-    """
-    Patient.generalPractitioner reference element.
-
-    Link to another resource (Practitioner | PractitionerRole | Organization).
-    """
-
-    refType: Literal["Practitioner", "PractitionerRole", "Organization"] = Field(
-        ..., description="Patient's nominated primary care provider reference type"
-    )
-
-    refId: int = Field(
-        ..., description="Patient's nominated primary care provider reference Id"
-    )
-
-
-class PatientLinkRef(FHIRBaseModel):
-    """
-    Patient.link backbone element.
-
-    Link to another patient or related person resource.
-    """
-
-    other_ref_type: Literal["Patient", "RelatedPerson"] = Field(
-        ...,
-        description="The other patient or related person resource reference type.",
-    )
-
-    other_ref_id: int = Field(
-        ...,
-        description="The other patient or related person resource reference Id.",
-    )
-
-    type: PatientLinkType = Field(
-        ...,
-        description="The type of link between this patient and the other resource.",
+        description="Marital status of the patient.",
+        examples=["single", "married", "divorced", "widowed"],
     )
 
 
 class PatientCreateSchema(FHIRCreateSchema, PatientBase):
     """
-    Schema used for creating a new Patient resource.
+    Schema used for creating a new Patient record.
     """
 
     resourceType: Literal["Patient"] = Field(
@@ -220,77 +76,21 @@ class PatientCreateSchema(FHIRCreateSchema, PatientBase):
         description="FHIR resource type. Must always be 'Patient'.",
     )
 
-    generalPractitioner: Optional[List[GeneralPractitionerRef]] = Field(
-        None,
-        description="Patient's nominated primary care provider. "
-        "May reference Practitioner, PractitionerRole, or Organization.",
-    )
-
-    managingOrganizationId: Optional[int] = Field(
-        None,
-        description="Organization Id that is responsible for maintaining this patient record.",
-        ge=1,
-    )
-
-    link: Optional[List[PatientLinkRef]] = Field(
-        None,
-        description="Links to other Patient or RelatedPerson resources concerning the same individual.",
-    )
-
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "resourceType": "Patient",
                 "active": True,
-                "identifier": [
-                    {
-                        "system": "http://hospital.goodhealth.com/mrn",
-                        "value": "MRN-123456",
-                        "use": "official",
-                    }
-                ],
-                "name": [
-                    {
-                        "use": "official",
-                        "family": "Doe",
-                        "given": ["John", "A"],
-                        "text": "John A Doe",
-                    }
-                ],
-                "telecom": [
-                    {
-                        "system": "phone",
-                        "value": "+1-555-123-4567",
-                        "use": "mobile",
-                        "rank": 1,
-                    }
-                ],
+                "first_name": "John",
+                "middle_name": "Andrew",
+                "last_name": "Doe",
                 "gender": "male",
-                "birthDate": "1985-04-12",
-                "address": [
-                    {
-                        "use": "home",
-                        "line": ["123 Main Street"],
-                        "city": "New York",
-                        "state": "NY",
-                        "postalCode": "10001",
-                        "country": "USA",
-                    }
-                ],
-                "extension": [
-                    {
-                        "url": "http://hl7.org/fhir/StructureDefinition/patient-birthTime",
-                        "valueDateTime": "1985-04-12T08:30:00Z",
-                    }
-                ],
+                "birth_date": "1985-04-12",
+                "marital_status": "married",
+                "deceased_boolean": False,
             }
         }
     )
-
-
-# ─────────────────────────────────────────────────────────────
-# Response Schema
-# ─────────────────────────────────────────────────────────────
 
 
 class PatientResponseSchema(FHIRResponseSchema, PatientBase):
@@ -303,34 +103,33 @@ class PatientResponseSchema(FHIRResponseSchema, PatientBase):
         description="FHIR resource type.",
     )
 
-    generalPractitioner: Optional[List[Reference]] = Field(
-        None,
-        description=(
-            "Patient's nominated primary care provider. "
-            "May reference Practitioner, PractitionerRole, or Organization."
-        ),
+    id: int = Field(
+        ...,
+        description="Internal database identifier for the patient.",
+        example=1,
     )
 
-    managingOrganization: Optional[Reference] = Field(
-        None,
-        description="Organization that is responsible for maintaining this patient record.",
-    )
-
-    link: Optional[List[PatientLink]] = Field(
-        None,
-        description="Links to other Patient or RelatedPerson resources concerning the same individual.",
+    patient_id: int = Field(
+        ...,
+        description="Hospital-assigned patient identifier starting from 10000.",
+        example=10000,
     )
 
     model_config = ConfigDict(
+        from_attributes=True,
         json_schema_extra={
             "example": {
-                "id": "123",
                 "resourceType": "Patient",
-                "meta": {"versionId": "2", "lastUpdated": "2026-02-28T12:30:00Z"},
+                "id": 1,
+                "patient_id": 10000,
                 "active": True,
-                "name": [{"family": "Doe", "given": ["John"]}],
+                "first_name": "John",
+                "middle_name": "Andrew",
+                "last_name": "Doe",
                 "gender": "male",
-                "birthDate": "1985-04-12",
+                "birth_date": "1985-04-12",
+                "marital_status": "married",
+                "deceased_boolean": False,
             }
-        }
+        },
     )
