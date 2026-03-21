@@ -83,6 +83,10 @@ Designed for integration with AI agents via FastMCP dynamic tool generation.
             "name": "Encounters",
             "description": "Operations for managing FHIR Encounter resources — clinical interactions between patients and providers (visits, admissions, telehealth). Supports create, read, update, list, and delete.",
         },
+        {
+            "name": "Appointments",
+            "description": "Operations for managing FHIR Appointment resources — scheduled healthcare events for patients and practitioners at a specific date and time. Supports create, read, update, list, and delete.",
+        },
     ],
     lifespan=lifespan,
 )
