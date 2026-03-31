@@ -33,6 +33,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         redis = request.app.state.redis
 
+        if not redis:
+            logger.warning("Redis is not available, skipping rate limiting")
+            return await call_next(request)
+
         # ----------------------------
         # Identify client
         # ----------------------------

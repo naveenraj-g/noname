@@ -8,6 +8,8 @@ class PractitionerModel(Base):
     __tablename__ = "practitioner"
 
     id = Column(Integer, primary_key=True, autoincrement=True, index=True)
+    user_id = Column(String, nullable=True)
+    org_id = Column(String, nullable=True)
     active = Column(Boolean, nullable=True)
     gender = Column(String, nullable=True)
     birth_date = Column(Date, nullable=True)
@@ -50,6 +52,7 @@ class PractitionerIdentifier(Base):
     practitioner_id = Column(
         Integer, ForeignKey("practitioner.id"), nullable=False, index=True
     )
+    org_id = Column(String, nullable=True)
 
     system = Column(String, nullable=True)
     value = Column(String, nullable=True)
@@ -65,6 +68,7 @@ class PractitionerName(Base):
     practitioner_id = Column(
         Integer, ForeignKey("practitioner.id"), nullable=False, index=True
     )
+    org_id = Column(String, nullable=True)
 
     use = Column(String, nullable=True)
     family = Column(String, nullable=True)
@@ -83,6 +87,7 @@ class PractitionerTelecom(Base):
     practitioner_id = Column(
         Integer, ForeignKey("practitioner.id"), nullable=False, index=True
     )
+    org_id = Column(String, nullable=True)
 
     system = Column(String, nullable=True)
     value = Column(String, nullable=True)
@@ -99,6 +104,7 @@ class PractitionerAddress(Base):
     practitioner_id = Column(
         Integer, ForeignKey("practitioner.id"), nullable=False, index=True
     )
+    org_id = Column(String, nullable=True)
 
     use = Column(String, nullable=True)
     type = Column(String, nullable=True)
@@ -120,6 +126,7 @@ class PractitionerQualification(Base):
     practitioner_id = Column(
         Integer, ForeignKey("practitioner.id"), nullable=False, index=True
     )
+    org_id = Column(String, nullable=True)
 
     identifier_system = Column(String, nullable=True)
     identifier_value = Column(String, nullable=True)

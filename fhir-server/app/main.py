@@ -49,7 +49,7 @@ async def lifespan(app: FastAPI):
         logger.info("Connected to Redis successfully.")
     except Exception as e:
         logger.error("Failed to connect to Redis.", exc_info=e)
-
+        app.state.redis = None
     yield
 
     logger.info("🔴 Shutting down application...")

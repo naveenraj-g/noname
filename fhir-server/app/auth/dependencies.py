@@ -1,18 +1,10 @@
-from fastapi import HTTPException, status, Request, Depends
+from fastapi import HTTPException, status, Request
 from jwt import PyJWKClient
 import jwt
 from app.core.config import settings
-import httpx
 from app.errors.auth import AuthenticationError
 
-KEYCLOAK_TOKEN_URL = (
-    f"{settings.KEYCLOAK_URL}/realms/"
-    f"{settings.KEYCLOAK_REALM_NAME}/protocol/openid-connect/token"
-)
-
-JWKS_URL = f"{settings.KEYCLOAK_URL}/realms/{settings.KEYCLOAK_REALM_NAME}/protocol/openid-connect/certs"
-
-jwks_client = PyJWKClient(JWKS_URL)
+jwks_client = PyJWKClient(settings.IAM_JWKS_URL)
 
 
 def decode_token(token: str):
@@ -21,10 +13,10 @@ def decode_token(token: str):
     return jwt.decode(
         token,
         signing_key.key,
-        algorithms=["RS256"],
-        # audience=settings.KEYCLOAK_CLIENT_ID,
-        issuer=f"{settings.KEYCLOAK_URL}/realms/{settings.KEYCLOAK_REALM_NAME}",
-        options={"verify_aud": False},
+        audience=settings.IAM_ISSUER,
+        issuer=settings.IAM_ISSUER,
+        algorithms=["EdDSA", "RS256"],
+        options={"verify_aud": True},
     )
 
 
@@ -38,42 +30,35 @@ async def get_current_user(request: Request):
 
     try:
         payload = decode_token(token)
-        payload["principal_type"] = (
-            "user" if "preferred_username" in payload else "service"
-        )
         request.state.user = payload
         request.state.token = token
         return payload
+
+    except jwt.ExpiredSignatureError:
+        raise AuthenticationError("Token expired")
+    except jwt.InvalidTokenError:
+        raise AuthenticationError("Invalid token")
     except Exception:
         raise AuthenticationError("Invalid or expired token")
 
 
 # Permission
 #   Resource = Patient
-#   Scope = read
-async def check_permission(token: str, resource: str, scope: str):
-    async with httpx.AsyncClient(timeout=5.0) as client:
-        response = await client.post(
-            KEYCLOAK_TOKEN_URL,
-            data={
-                "grant_type": "urn:ietf:params:oauth:grant-type:uma-ticket",
-                "audience": settings.KEYCLOAK_CLIENT_ID,
-                "permission": f"{resource}#{scope}",
-            },
-            headers={"Authorization": f"Bearer {token}"},
-        )
+#   action = read
+async def check_permission(user: str, resource: str, action: str):
+    permissions = user.get("permissions", [])
 
-    if response.status_code != 200:
+    if f"{resource}:{action}" not in permissions:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission denied",
         )
 
 
-def require_permission(resource: str, scope: str):
+def require_permission(resource: str, action: str):
     async def dependency(request: Request):
-        token = request.state.token
-        await check_permission(token, resource, scope)
+        user = request.state.user
+        await check_permission(user, resource, action)
 
-    dependency.required_permission = f"{resource}:{scope}"
+    dependency.required_permission = f"{resource}:{action}"
     return dependency

@@ -9,6 +9,8 @@ class EncounterModel(Base):
     __tablename__ = "encounter"
 
     id = Column(Integer, primary_key=True, autoincrement=True, index=True)
+    user_id = Column(String, nullable=True)
+    org_id = Column(String, nullable=True)
     status = Column(String, nullable=True)  # planned, in-progress, finished, cancelled
     class_code = Column(String, nullable=True)  # inpatient, outpatient, emergency, etc.
     priority = Column(String, nullable=True)
@@ -19,6 +21,7 @@ class EncounterModel(Base):
         nullable=True,
     )
     subject_id = Column(Integer, nullable=True)
+    subject_display = Column(String, nullable=True)
 
     period_start = Column(DateTime(timezone=True), nullable=True)
     period_end = Column(DateTime(timezone=True), nullable=True)
@@ -51,6 +54,7 @@ class EncounterType(Base):
     encounter_id = Column(
         Integer, ForeignKey("encounter.id"), nullable=False, index=True
     )
+    org_id = Column(String, nullable=True)
 
     coding_system = Column(String, nullable=True)
     coding_code = Column(String, nullable=True)
@@ -58,6 +62,17 @@ class EncounterType(Base):
     text = Column(String, nullable=True)
 
     encounter = relationship("EncounterModel", back_populates="types")
+
+
+# class BasedOn(Base):
+#     __tablename__ ="based_on"
+#     id = Column(Integer, primary_key=True, autoincrement=True)
+#     encounter_id = Column(
+#         Integer, ForeignKey("encounter.id"), nullable=False, index=True
+#     )
+#     org_id = Column(String, nullable=True)
+
+#     reference_type=
 
 
 class EncounterParticipant(Base):
@@ -68,6 +83,7 @@ class EncounterParticipant(Base):
     encounter_id = Column(
         Integer, ForeignKey("encounter.id"), nullable=False, index=True
     )
+    org_id = Column(String, nullable=True)
 
     type_text = Column(
         String, nullable=True
@@ -93,6 +109,7 @@ class EncounterDiagnosis(Base):
     encounter_id = Column(
         Integer, ForeignKey("encounter.id"), nullable=False, index=True
     )
+    org_id = Column(String, nullable=True)
 
     condition_reference = Column(
         String, nullable=True
@@ -112,6 +129,7 @@ class EncounterLocation(Base):
     encounter_id = Column(
         Integer, ForeignKey("encounter.id"), nullable=False, index=True
     )
+    org_id = Column(String, nullable=True)
 
     location_reference = Column(String, nullable=True)  # Reference to Location
     status = Column(String, nullable=True)  # planned, active, reserved, completed
@@ -128,6 +146,7 @@ class EncounterReasonCode(Base):
     encounter_id = Column(
         Integer, ForeignKey("encounter.id"), nullable=False, index=True
     )
+    org_id = Column(String, nullable=True)
 
     coding_system = Column(String, nullable=True)
     coding_code = Column(String, nullable=True)

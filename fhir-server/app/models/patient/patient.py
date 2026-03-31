@@ -94,6 +94,8 @@ class PatientModel(Base):
         unique=True,
         index=True,
     )
+    user_id = Column(String, nullable=True)
+    org_id = Column(String, nullable=True)
     active = Column(Boolean, nullable=True)
     first_name = Column(String, nullable=True)
     middle_name = Column(String, nullable=True)

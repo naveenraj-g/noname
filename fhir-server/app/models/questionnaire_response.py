@@ -1,4 +1,13 @@
-from sqlalchemy import Column, String, DateTime, Integer, ForeignKey, Text, Boolean, Float
+from sqlalchemy import (
+    Column,
+    String,
+    DateTime,
+    Integer,
+    ForeignKey,
+    Text,
+    Boolean,
+    Float,
+)
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import FHIRBase as Base
@@ -8,10 +17,14 @@ class QuestionnaireResponseModel(Base):
     __tablename__ = "questionnaire_response"
 
     id = Column(Integer, primary_key=True, autoincrement=True, index=True)
+    # user_id = Column(String, nullable=True)
+    org_id = Column(String, nullable=True)
 
     # Required
     questionnaire = Column(String, nullable=False)  # canonical URL
-    status = Column(String, nullable=False)  # in-progress | completed | amended | entered-in-error | stopped
+    status = Column(
+        String, nullable=False
+    )  # in-progress | completed | amended | entered-in-error | stopped
 
     # Subject
     subject_reference = Column(String, nullable=True)
@@ -42,8 +55,13 @@ class QuestionnaireResponseItemModel(Base):
     __tablename__ = "questionnaire_response_item"
 
     id = Column(Integer, primary_key=True, autoincrement=True, index=True)
-    response_id = Column(Integer, ForeignKey("questionnaire_response.id"), nullable=False, index=True)
-    parent_item_id = Column(Integer, ForeignKey("questionnaire_response_item.id"), nullable=True, index=True)
+    response_id = Column(
+        Integer, ForeignKey("questionnaire_response.id"), nullable=False, index=True
+    )
+    parent_item_id = Column(
+        Integer, ForeignKey("questionnaire_response_item.id"), nullable=True, index=True
+    )
+    org_id = Column(String, nullable=True)
 
     link_id = Column(String, nullable=False)
     text = Column(String, nullable=True)
@@ -70,16 +88,24 @@ class QuestionnaireResponseAnswerModel(Base):
     __tablename__ = "questionnaire_response_answer"
 
     id = Column(Integer, primary_key=True, autoincrement=True, index=True)
-    item_id = Column(Integer, ForeignKey("questionnaire_response_item.id"), nullable=False, index=True)
+    item_id = Column(
+        Integer,
+        ForeignKey("questionnaire_response_item.id"),
+        nullable=False,
+        index=True,
+    )
+    org_id = Column(String, nullable=True)
 
     # Discriminator for which value[x] is stored
     value_type = Column(String, nullable=False)
 
     # Scalar values
-    value_string = Column(Text, nullable=True)     # valueString, valueUri, valueTime, valueDate
+    value_string = Column(
+        Text, nullable=True
+    )  # valueString, valueUri, valueTime, valueDate
     value_boolean = Column(Boolean, nullable=True)  # valueBoolean
     value_integer = Column(Integer, nullable=True)  # valueInteger
-    value_decimal = Column(Float, nullable=True)    # valueDecimal
+    value_decimal = Column(Float, nullable=True)  # valueDecimal
     value_datetime = Column(DateTime(timezone=True), nullable=True)  # valueDateTime
 
     # valueCoding

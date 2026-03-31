@@ -8,6 +8,8 @@ class AppointmentModel(Base):
     __tablename__ = "appointment"
 
     id = Column(Integer, primary_key=True, autoincrement=True, index=True)
+    user_id = Column(String, nullable=True)
+    org_id = Column(String, nullable=True)
 
     # Required
     status = Column(String, nullable=False)  # proposed | pending | booked | arrived | fulfilled | cancelled | noshow | entered-in-error | checked-in | waitlist
@@ -54,6 +56,7 @@ class AppointmentParticipant(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     appointment_id = Column(Integer, ForeignKey("appointment.id"), nullable=False, index=True)
+    org_id = Column(String, nullable=True)
 
     actor_reference = Column(String, nullable=True)   # e.g. "Patient/123", "Practitioner/456"
     actor_display = Column(String, nullable=True)
@@ -76,6 +79,7 @@ class AppointmentReasonCode(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     appointment_id = Column(Integer, ForeignKey("appointment.id"), nullable=False, index=True)
+    org_id = Column(String, nullable=True)
 
     coding_system = Column(String, nullable=True)
     coding_code = Column(String, nullable=True)
