@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import List, Optional
 from typing_extensions import Literal
 from pydantic import BaseModel, ConfigDict, Field
@@ -21,6 +21,69 @@ AppointmentStatus = Literal[
 
 ParticipantStatus = Literal["accepted", "declined", "tentative", "needs-action"]
 ParticipantRequired = Literal["required", "optional", "information-only"]
+
+
+# ── Recurrence template input schemas ─────────────────────────────────────
+
+
+class RecurrenceWeeklyTemplateInput(BaseModel):
+    """Days of the week on which the appointment recurs."""
+
+    model_config = ConfigDict(extra="forbid")
+    monday: Optional[bool] = None
+    tuesday: Optional[bool] = None
+    wednesday: Optional[bool] = None
+    thursday: Optional[bool] = None
+    friday: Optional[bool] = None
+    saturday: Optional[bool] = None
+    sunday: Optional[bool] = None
+    week_interval: Optional[int] = Field(None, ge=1, description="Weeks between occurrences (default 1).")
+
+
+class RecurrenceMonthlyTemplateInput(BaseModel):
+    """Monthly recurrence — either a fixed day-of-month or an nth weekday."""
+
+    model_config = ConfigDict(extra="forbid")
+    day_of_month: Optional[int] = Field(None, ge=1, le=31, description="Fixed day of the month (e.g. 15).")
+    nth_week_code: Optional[str] = Field(None, description="Nth week ordinal code, e.g. '1' (1st), '2' (2nd), '-1' (last).")
+    nth_week_display: Optional[str] = None
+    day_of_week_code: Optional[str] = Field(None, description="Day of week code: mon | tue | wed | thu | fri | sat | sun.")
+    day_of_week_display: Optional[str] = None
+    month_interval: int = Field(..., ge=1, description="Months between occurrences.")
+
+
+class RecurrenceYearlyTemplateInput(BaseModel):
+    """Yearly recurrence."""
+
+    model_config = ConfigDict(extra="forbid")
+    year_interval: int = Field(..., ge=1, description="Years between occurrences.")
+
+
+class RecurrenceTemplateInput(BaseModel):
+    """
+    Defines the recurrence pattern for a series of appointments.
+    Exactly one of weekly_template, monthly_template, or yearly_template
+    should be provided to match recurrence_type_code.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    recurrence_type_code: str = Field(
+        ...,
+        description="Frequency of recurrence: daily | weekly | monthly | yearly.",
+        examples=["weekly"],
+    )
+    recurrence_type_display: Optional[str] = None
+    recurrence_type_system: Optional[str] = None
+    timezone_code: Optional[str] = Field(None, description="IANA timezone, e.g. 'America/New_York'.")
+    timezone_display: Optional[str] = None
+    last_occurrence_date: Optional[date] = Field(None, description="Date after which no more occurrences.")
+    occurrence_count: Optional[int] = Field(None, ge=1, description="Total number of occurrences.")
+    occurrence_dates: Optional[List[date]] = Field(None, description="Explicit list of occurrence dates.")
+    excluding_dates: Optional[List[date]] = Field(None, description="Dates within the series to skip.")
+    excluding_recurrence_ids: Optional[List[int]] = Field(None, description="Recurrence IDs (ordinal positions) to skip.")
+    weekly_template: Optional[RecurrenceWeeklyTemplateInput] = None
+    monthly_template: Optional[RecurrenceMonthlyTemplateInput] = None
+    yearly_template: Optional[RecurrenceYearlyTemplateInput] = None
 
 
 # ── Sub-resource input schemas ─────────────────────────────────────────────
@@ -139,6 +202,10 @@ class AppointmentCreateSchema(BaseModel):
     appointment_type_display: Optional[str] = None
     reason_codes: Optional[List[AppointmentReasonInput]] = None
     participant: List[AppointmentParticipantInput] = Field(..., min_length=1)
+    # Recurrence
+    recurrence_id: Optional[int] = Field(None, ge=1, description="For a recurring instance: which occurrence in the series this is.")
+    occurrence_changed: Optional[bool] = Field(None, description="True if this instance was changed from the recurrence template.")
+    recurrence_template: Optional[RecurrenceTemplateInput] = None
 
 
 class AppointmentPatchSchema(BaseModel):
@@ -193,6 +260,41 @@ class FHIRAppointmentParticipant(BaseModel):
     period: Optional[FHIRPeriod] = None
 
 
+class FHIRWeeklyTemplate(BaseModel):
+    monday: Optional[bool] = None
+    tuesday: Optional[bool] = None
+    wednesday: Optional[bool] = None
+    thursday: Optional[bool] = None
+    friday: Optional[bool] = None
+    saturday: Optional[bool] = None
+    sunday: Optional[bool] = None
+    weekInterval: Optional[int] = None
+
+
+class FHIRMonthlyTemplate(BaseModel):
+    dayOfMonth: Optional[int] = None
+    nthWeekOfMonth: Optional[FHIRCoding] = None
+    dayOfWeek: Optional[FHIRCoding] = None
+    monthInterval: int
+
+
+class FHIRYearlyTemplate(BaseModel):
+    yearInterval: int
+
+
+class FHIRRecurrenceTemplate(BaseModel):
+    timezone: Optional[FHIRCodeableConcept] = None
+    recurrenceType: FHIRCodeableConcept
+    lastOccurrenceDate: Optional[date] = None
+    occurrenceCount: Optional[int] = None
+    occurrenceDates: Optional[List[date]] = None
+    excludingDate: Optional[List[date]] = None
+    excludingRecurrenceId: Optional[List[int]] = None
+    weeklyTemplate: Optional[FHIRWeeklyTemplate] = None
+    monthlyTemplate: Optional[FHIRMonthlyTemplate] = None
+    yearlyTemplate: Optional[FHIRYearlyTemplate] = None
+
+
 # ── Response schema ────────────────────────────────────────────────────────
 
 
@@ -224,3 +326,6 @@ class AppointmentResponseSchema(BaseModel):
     appointmentType: Optional[FHIRCodeableConcept] = None
     reasonCode: Optional[List[FHIRCodeableConcept]] = None
     participant: List[FHIRAppointmentParticipant]
+    recurrenceId: Optional[int] = None
+    occurrenceChanged: Optional[bool] = None
+    recurrenceTemplate: Optional[FHIRRecurrenceTemplate] = None

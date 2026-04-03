@@ -125,6 +125,83 @@ def to_fhir_appointment(appointment: "AppointmentModel") -> dict:
 
     result["participant"] = participant_list
 
+    # recurrenceId / occurrenceChanged (on the instance, not the template)
+    if appointment.recurrence_id is not None:
+        result["recurrenceId"] = appointment.recurrence_id
+    if appointment.occurrence_changed is not None:
+        result["occurrenceChanged"] = appointment.occurrence_changed
+
+    # recurrenceTemplate
+    rt = appointment.recurrence_template
+    if rt:
+        rt_data: dict = {
+            "recurrenceType": {
+                "coding": [{k: v for k, v in {
+                    "system": rt.recurrence_type_system,
+                    "code": rt.recurrence_type_code,
+                    "display": rt.recurrence_type_display,
+                }.items() if v}]
+            }
+        }
+
+        if rt.timezone_code:
+            rt_data["timezone"] = {"coding": [{k: v for k, v in {
+                "code": rt.timezone_code,
+                "display": rt.timezone_display,
+            }.items() if v}]}
+
+        if rt.last_occurrence_date:
+            rt_data["lastOccurrenceDate"] = rt.last_occurrence_date.isoformat()
+        if rt.occurrence_count is not None:
+            rt_data["occurrenceCount"] = rt.occurrence_count
+        if rt.occurrence_dates:
+            rt_data["occurrenceDates"] = [d for d in rt.occurrence_dates.split(",") if d]
+        if rt.excluding_dates:
+            rt_data["excludingDate"] = [d for d in rt.excluding_dates.split(",") if d]
+        if rt.excluding_recurrence_ids:
+            rt_data["excludingRecurrenceId"] = [
+                int(i) for i in rt.excluding_recurrence_ids.split(",") if i
+            ]
+
+        # weeklyTemplate
+        weekly_fields = {
+            "monday": rt.weekly_monday,
+            "tuesday": rt.weekly_tuesday,
+            "wednesday": rt.weekly_wednesday,
+            "thursday": rt.weekly_thursday,
+            "friday": rt.weekly_friday,
+            "saturday": rt.weekly_saturday,
+            "sunday": rt.weekly_sunday,
+        }
+        weekly = {k: v for k, v in weekly_fields.items() if v is not None}
+        if rt.weekly_week_interval is not None:
+            weekly["weekInterval"] = rt.weekly_week_interval
+        if weekly:
+            rt_data["weeklyTemplate"] = weekly
+
+        # monthlyTemplate
+        if rt.monthly_month_interval is not None:
+            monthly: dict = {"monthInterval": rt.monthly_month_interval}
+            if rt.monthly_day_of_month is not None:
+                monthly["dayOfMonth"] = rt.monthly_day_of_month
+            if rt.monthly_nth_week_code:
+                monthly["nthWeekOfMonth"] = {k: v for k, v in {
+                    "code": rt.monthly_nth_week_code,
+                    "display": rt.monthly_nth_week_display,
+                }.items() if v}
+            if rt.monthly_day_of_week_code:
+                monthly["dayOfWeek"] = {k: v for k, v in {
+                    "code": rt.monthly_day_of_week_code,
+                    "display": rt.monthly_day_of_week_display,
+                }.items() if v}
+            rt_data["monthlyTemplate"] = monthly
+
+        # yearlyTemplate
+        if rt.yearly_year_interval is not None:
+            rt_data["yearlyTemplate"] = {"yearInterval": rt.yearly_year_interval}
+
+        result["recurrenceTemplate"] = rt_data
+
     return {k: v for k, v in result.items() if v is not None}
 
 
@@ -199,5 +276,63 @@ def to_plain_appointment(appointment: "AppointmentModel") -> dict:
             }.items() if v is not None}
             for p in appointment.participants
         ]
+
+    if appointment.recurrence_id is not None:
+        result["recurrence_id"] = appointment.recurrence_id
+    if appointment.occurrence_changed is not None:
+        result["occurrence_changed"] = appointment.occurrence_changed
+
+    rt = appointment.recurrence_template
+    if rt:
+        rt_plain: dict = {
+            "recurrence_type_code": rt.recurrence_type_code,
+        }
+        if rt.recurrence_type_display:
+            rt_plain["recurrence_type_display"] = rt.recurrence_type_display
+        if rt.recurrence_type_system:
+            rt_plain["recurrence_type_system"] = rt.recurrence_type_system
+        if rt.timezone_code:
+            rt_plain["timezone_code"] = rt.timezone_code
+        if rt.last_occurrence_date:
+            rt_plain["last_occurrence_date"] = rt.last_occurrence_date.isoformat()
+        if rt.occurrence_count is not None:
+            rt_plain["occurrence_count"] = rt.occurrence_count
+        if rt.occurrence_dates:
+            rt_plain["occurrence_dates"] = [d for d in rt.occurrence_dates.split(",") if d]
+        if rt.excluding_dates:
+            rt_plain["excluding_dates"] = [d for d in rt.excluding_dates.split(",") if d]
+        if rt.excluding_recurrence_ids:
+            rt_plain["excluding_recurrence_ids"] = [
+                int(i) for i in rt.excluding_recurrence_ids.split(",") if i
+            ]
+
+        weekly_fields = {k: v for k, v in {
+            "monday": rt.weekly_monday,
+            "tuesday": rt.weekly_tuesday,
+            "wednesday": rt.weekly_wednesday,
+            "thursday": rt.weekly_thursday,
+            "friday": rt.weekly_friday,
+            "saturday": rt.weekly_saturday,
+            "sunday": rt.weekly_sunday,
+            "week_interval": rt.weekly_week_interval,
+        }.items() if v is not None}
+        if weekly_fields:
+            rt_plain["weekly_template"] = weekly_fields
+
+        monthly_fields = {k: v for k, v in {
+            "day_of_month": rt.monthly_day_of_month,
+            "nth_week_code": rt.monthly_nth_week_code,
+            "nth_week_display": rt.monthly_nth_week_display,
+            "day_of_week_code": rt.monthly_day_of_week_code,
+            "day_of_week_display": rt.monthly_day_of_week_display,
+            "month_interval": rt.monthly_month_interval,
+        }.items() if v is not None}
+        if monthly_fields:
+            rt_plain["monthly_template"] = monthly_fields
+
+        if rt.yearly_year_interval is not None:
+            rt_plain["yearly_template"] = {"year_interval": rt.yearly_year_interval}
+
+        result["recurrence_template"] = rt_plain
 
     return result

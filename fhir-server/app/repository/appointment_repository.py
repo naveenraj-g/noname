@@ -8,6 +8,7 @@ from app.models.appointment import (
     AppointmentModel,
     AppointmentParticipant,
     AppointmentReasonCode,
+    AppointmentRecurrenceTemplate,
 )
 from app.schemas.appointment import AppointmentCreateSchema, AppointmentPatchSchema
 
@@ -17,6 +18,7 @@ def _with_relationships(stmt):
     return stmt.options(
         selectinload(AppointmentModel.participants),
         selectinload(AppointmentModel.reason_codes),
+        selectinload(AppointmentModel.recurrence_template),
     )
 
 
@@ -116,6 +118,46 @@ class AppointmentRepository:
                     period_start=p.period_start,
                     period_end=p.period_end,
                 ))
+
+            # recurrence fields on the appointment instance
+            if payload.recurrence_id is not None:
+                appointment.recurrence_id = payload.recurrence_id
+            if payload.occurrence_changed is not None:
+                appointment.occurrence_changed = payload.occurrence_changed
+
+            # recurrenceTemplate
+            if payload.recurrence_template:
+                rt = payload.recurrence_template
+                appointment.recurrence_template = AppointmentRecurrenceTemplate(
+                    recurrence_type_code=rt.recurrence_type_code,
+                    recurrence_type_display=rt.recurrence_type_display,
+                    recurrence_type_system=rt.recurrence_type_system,
+                    timezone_code=rt.timezone_code,
+                    timezone_display=rt.timezone_display,
+                    last_occurrence_date=rt.last_occurrence_date,
+                    occurrence_count=rt.occurrence_count,
+                    occurrence_dates=",".join(str(d) for d in rt.occurrence_dates) if rt.occurrence_dates else None,
+                    excluding_dates=",".join(str(d) for d in rt.excluding_dates) if rt.excluding_dates else None,
+                    excluding_recurrence_ids=",".join(str(i) for i in rt.excluding_recurrence_ids) if rt.excluding_recurrence_ids else None,
+                    # weekly
+                    weekly_monday=rt.weekly_template.monday if rt.weekly_template else None,
+                    weekly_tuesday=rt.weekly_template.tuesday if rt.weekly_template else None,
+                    weekly_wednesday=rt.weekly_template.wednesday if rt.weekly_template else None,
+                    weekly_thursday=rt.weekly_template.thursday if rt.weekly_template else None,
+                    weekly_friday=rt.weekly_template.friday if rt.weekly_template else None,
+                    weekly_saturday=rt.weekly_template.saturday if rt.weekly_template else None,
+                    weekly_sunday=rt.weekly_template.sunday if rt.weekly_template else None,
+                    weekly_week_interval=rt.weekly_template.week_interval if rt.weekly_template else None,
+                    # monthly
+                    monthly_day_of_month=rt.monthly_template.day_of_month if rt.monthly_template else None,
+                    monthly_nth_week_code=rt.monthly_template.nth_week_code if rt.monthly_template else None,
+                    monthly_nth_week_display=rt.monthly_template.nth_week_display if rt.monthly_template else None,
+                    monthly_day_of_week_code=rt.monthly_template.day_of_week_code if rt.monthly_template else None,
+                    monthly_day_of_week_display=rt.monthly_template.day_of_week_display if rt.monthly_template else None,
+                    monthly_month_interval=rt.monthly_template.month_interval if rt.monthly_template else None,
+                    # yearly
+                    yearly_year_interval=rt.yearly_template.year_interval if rt.yearly_template else None,
+                )
 
             try:
                 session.add(appointment)

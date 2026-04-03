@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, Integer, ForeignKey, Text, Sequence
+from sqlalchemy import Column, String, DateTime, Integer, ForeignKey, Text, Sequence, Boolean, Date
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import FHIRBase as Base
@@ -51,7 +51,11 @@ class AppointmentModel(Base):
     appointment_type_display = Column(String, nullable=True)
 
     # Subject (Patient reference)
-    subject_reference = Column(String, nullable=True)  # e.g. "Patient/123"
+    subject_reference = Column(String, nullable=True)  # e.g. "Patient/10001"
+
+    # Recurrence — for individual instances of a recurring series
+    recurrence_id = Column(Integer, nullable=True)        # which occurrence in the series
+    occurrence_changed = Column(Boolean, nullable=True)   # was this instance changed from the template
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -62,6 +66,12 @@ class AppointmentModel(Base):
     )
     reason_codes = relationship(
         "AppointmentReasonCode", back_populates="appointment", cascade="all, delete-orphan"
+    )
+    recurrence_template = relationship(
+        "AppointmentRecurrenceTemplate",
+        back_populates="appointment",
+        cascade="all, delete-orphan",
+        uselist=False,
     )
 
 
@@ -101,3 +111,58 @@ class AppointmentReasonCode(Base):
     text = Column(String, nullable=True)
 
     appointment = relationship("AppointmentModel", back_populates="reason_codes")
+
+
+class AppointmentRecurrenceTemplate(Base):
+    """
+    Stores the recurrence pattern for a recurring Appointment series.
+    One-to-one with AppointmentModel (uselist=False on the parent side).
+    """
+
+    __tablename__ = "appointment_recurrence_template"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    appointment_id = Column(
+        Integer, ForeignKey("appointment.id"), nullable=False, unique=True, index=True
+    )
+
+    # recurrenceType (required) — code/display/system of the frequency
+    recurrence_type_code = Column(String, nullable=False)   # daily | weekly | monthly | yearly
+    recurrence_type_display = Column(String, nullable=True)
+    recurrence_type_system = Column(String, nullable=True)
+
+    # timezone — IANA timezone identifier code
+    timezone_code = Column(String, nullable=True)
+    timezone_display = Column(String, nullable=True)
+
+    # Termination — either lastOccurrenceDate OR occurrenceCount
+    last_occurrence_date = Column(Date, nullable=True)
+    occurrence_count = Column(Integer, nullable=True)
+
+    # Array fields stored as comma-separated strings
+    occurrence_dates = Column(Text, nullable=True)          # "2024-01-01,2024-01-08,..."
+    excluding_dates = Column(Text, nullable=True)           # "2024-01-15,..."
+    excluding_recurrence_ids = Column(Text, nullable=True)  # "2,5,7"
+
+    # ── weeklyTemplate ────────────────────────────────────────────────────
+    weekly_monday = Column(Boolean, nullable=True)
+    weekly_tuesday = Column(Boolean, nullable=True)
+    weekly_wednesday = Column(Boolean, nullable=True)
+    weekly_thursday = Column(Boolean, nullable=True)
+    weekly_friday = Column(Boolean, nullable=True)
+    weekly_saturday = Column(Boolean, nullable=True)
+    weekly_sunday = Column(Boolean, nullable=True)
+    weekly_week_interval = Column(Integer, nullable=True)   # weeks between occurrences
+
+    # ── monthlyTemplate ───────────────────────────────────────────────────
+    monthly_day_of_month = Column(Integer, nullable=True)           # 1–31
+    monthly_nth_week_code = Column(String, nullable=True)           # 1st | 2nd | 3rd | 4th | -1st
+    monthly_nth_week_display = Column(String, nullable=True)
+    monthly_day_of_week_code = Column(String, nullable=True)        # mon | tue | wed | thu | fri | sat | sun
+    monthly_day_of_week_display = Column(String, nullable=True)
+    monthly_month_interval = Column(Integer, nullable=True)         # months between occurrences
+
+    # ── yearlyTemplate ────────────────────────────────────────────────────
+    yearly_year_interval = Column(Integer, nullable=True)           # years between occurrences
+
+    appointment = relationship("AppointmentModel", back_populates="recurrence_template")
