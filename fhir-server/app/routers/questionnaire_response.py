@@ -1,188 +1,167 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Path
-from fhir.resources.questionnaireresponse import QuestionnaireResponse
-from app.services.questionnaire_response_service import QuestionnaireResponseService
-from app.schemas.questionnaire_response import QuestionnaireResponseCreateSchema
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+
+from app.auth.dependencies import require_permission
+from app.auth.questionnaire_response_deps import get_authorized_questionnaire_response
+from app.core.content_negotiation import format_response, format_list_response
 from app.di.dependencies.questionnaire_response import get_questionnaire_response_service
+from app.models.questionnaire_response import QuestionnaireResponseModel
+from app.schemas.questionnaire_response import (
+    QuestionnaireResponseCreateSchema,
+    QuestionnaireResponsePatchSchema,
+    QuestionnaireResponseResponseSchema,
+)
+from app.services.questionnaire_response_service import QuestionnaireResponseService
 
 router = APIRouter()
 
 
-# ── Create QuestionnaireResponse ──────────────────────────────────────────────
+# ── Create QuestionnaireResponse ───────────────────────────────────────────
 
 
 @router.post(
     "/",
+    response_model=QuestionnaireResponseResponseSchema,
+    response_model_exclude_none=True,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("questionnaire_response", "create"))],
     operation_id="create_questionnaire_response",
-    summary="Create a new FHIR QuestionnaireResponse resource",
-    description="""
-Create a new FHIR QuestionnaireResponse resource representing a set of answers
-to questions from a Questionnaire.
-
-A QuestionnaireResponse records responses to individual questions, supports nested
-group items, and multiple answer value types (boolean, string, coding, quantity, etc.).
-
-Required fields: `questionnaire` (canonical URL) and `status`.
-
-Returns the complete FHIR QuestionnaireResponse resource including the server-assigned `id`.
-""",
-    response_description="The newly created FHIR QuestionnaireResponse resource with auto-generated ID.",
-    responses={
-        201: {"description": "QuestionnaireResponse successfully created."},
-        400: {"description": "Invalid FHIR QuestionnaireResponse payload."},
-        401: {"description": "Authentication required."},
-        422: {"description": "Validation error — malformed or missing required fields."},
-    },
+    summary="Create a new QuestionnaireResponse resource",
+    description="Records answers to a Questionnaire. Supports nested items, groups, and all FHIR R4 answer value types. References use public IDs (Patient/10001, Encounter/20001, Practitioner/30001).",
 )
 async def create_questionnaire_response(
     payload: QuestionnaireResponseCreateSchema,
-    service: QuestionnaireResponseService = Depends(get_questionnaire_response_service),
+    request: Request,
+    qr_service: QuestionnaireResponseService = Depends(get_questionnaire_response_service),
 ):
-    try:
-        data_dict = payload.model_dump(exclude_none=True, by_alias=True)
-        return await service.create_questionnaire_response(data_dict)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    user_id: str = request.state.user.get("sub")
+    org_id: str = request.state.user.get("activeOrganizationId")
+    qr = await qr_service.create_questionnaire_response(payload, user_id, org_id)
+    return format_response(
+        qr_service._to_fhir(qr),
+        qr_service._to_plain(qr),
+        request,
+    )
 
 
-# ── Get QuestionnaireResponse by ID ──────────────────────────────────────────
+# ── Get own QuestionnaireResponses (/me) ───────────────────────────────────
+# Declared before /{questionnaire_response_id} to avoid routing conflicts.
 
 
 @router.get(
-    "/{id}",
-    operation_id="get_questionnaire_response_by_id",
-    summary="Retrieve a QuestionnaireResponse resource by ID",
-    description="""
-Retrieve a single FHIR QuestionnaireResponse resource by its internal database ID.
+    "/me",
+    response_model=list[QuestionnaireResponseResponseSchema],
+    response_model_exclude_none=True,
+    dependencies=[Depends(require_permission("questionnaire_response", "read"))],
+    operation_id="get_my_questionnaire_responses",
+    summary="List all QuestionnaireResponse resources for the currently authenticated user",
+)
+async def get_my_questionnaire_responses(
+    request: Request,
+    qr_service: QuestionnaireResponseService = Depends(get_questionnaire_response_service),
+):
+    user_id: str = request.state.user.get("sub")
+    org_id: str = request.state.user.get("activeOrganizationId")
+    responses = await qr_service.get_me(user_id, org_id)
+    return format_list_response(
+        [qr_service._to_fhir(qr) for qr in responses],
+        [qr_service._to_plain(qr) for qr in responses],
+        request,
+    )
 
-Returns the full resource including all items, nested groups, and answer values.
-Returns 404 if no resource exists with the given ID.
-""",
-    response_description="The FHIR QuestionnaireResponse resource matching the given ID.",
-    responses={
-        200: {"description": "QuestionnaireResponse found and returned."},
-        404: {"description": "No QuestionnaireResponse exists with the specified ID."},
-        401: {"description": "Authentication required."},
-    },
+
+# ── Get QuestionnaireResponse by public id ─────────────────────────────────
+
+
+@router.get(
+    "/{questionnaire_response_id}",
+    response_model=QuestionnaireResponseResponseSchema,
+    response_model_exclude_none=True,
+    dependencies=[Depends(require_permission("questionnaire_response", "read"))],
+    operation_id="get_questionnaire_response_by_id",
+    summary="Retrieve a QuestionnaireResponse resource by public questionnaire_response_id",
 )
 async def get_questionnaire_response(
-    id: int = Path(
-        ...,
-        title="QuestionnaireResponse ID",
-        description="The internal database identifier of the QuestionnaireResponse resource.",
-        ge=1,
-    ),
-    service: QuestionnaireResponseService = Depends(get_questionnaire_response_service),
+    request: Request,
+    qr: QuestionnaireResponseModel = Depends(get_authorized_questionnaire_response),
+    qr_service: QuestionnaireResponseService = Depends(get_questionnaire_response_service),
 ):
-    qr = await service.get_questionnaire_response(id)
-    if not qr:
+    return format_response(
+        qr_service._to_fhir(qr),
+        qr_service._to_plain(qr),
+        request,
+    )
+
+
+# ── Patch QuestionnaireResponse ────────────────────────────────────────────
+
+
+@router.patch(
+    "/{questionnaire_response_id}",
+    response_model=QuestionnaireResponseResponseSchema,
+    response_model_exclude_none=True,
+    dependencies=[Depends(require_permission("questionnaire_response", "update"))],
+    operation_id="patch_questionnaire_response",
+    summary="Partially update a QuestionnaireResponse resource",
+    description="Only lifecycle fields are patchable: status, authored. To replace items/answers, re-create the resource.",
+)
+async def patch_questionnaire_response(
+    payload: QuestionnaireResponsePatchSchema,
+    request: Request,
+    qr: QuestionnaireResponseModel = Depends(get_authorized_questionnaire_response),
+    qr_service: QuestionnaireResponseService = Depends(get_questionnaire_response_service),
+):
+    updated = await qr_service.patch_questionnaire_response(
+        qr.questionnaire_response_id, payload
+    )
+    if not updated:
         raise HTTPException(status_code=404, detail="QuestionnaireResponse not found")
-    return qr
+    return format_response(
+        qr_service._to_fhir(updated),
+        qr_service._to_plain(updated),
+        request,
+    )
 
 
-# ── List All QuestionnaireResponses ───────────────────────────────────────────
+# ── List QuestionnaireResponses ────────────────────────────────────────────
 
 
 @router.get(
     "/",
+    response_model=list[QuestionnaireResponseResponseSchema],
+    response_model_exclude_none=True,
+    dependencies=[Depends(require_permission("questionnaire_response", "read"))],
     operation_id="list_questionnaire_responses",
     summary="List all QuestionnaireResponse resources",
-    description="""
-Retrieve a list of all FHIR QuestionnaireResponse resources stored in the system.
-
-Returns an array of complete QuestionnaireResponse resources. Returns an empty array if none exist.
-""",
-    response_description="An array of all FHIR QuestionnaireResponse resources.",
-    responses={
-        200: {"description": "Successfully retrieved the list of questionnaire responses."},
-        401: {"description": "Authentication required."},
-    },
+    description="Returns all questionnaire responses. Filter by patient using `?patient_id={patient_id}` (public patient_id).",
 )
 async def list_questionnaire_responses(
-    service: QuestionnaireResponseService = Depends(get_questionnaire_response_service),
+    request: Request,
+    patient_id: Optional[int] = None,
+    qr_service: QuestionnaireResponseService = Depends(get_questionnaire_response_service),
 ):
-    return await service.list_questionnaire_responses()
+    responses = await qr_service.list_questionnaire_responses(patient_id=patient_id)
+    return format_list_response(
+        [qr_service._to_fhir(qr) for qr in responses],
+        [qr_service._to_plain(qr) for qr in responses],
+        request,
+    )
 
 
-# ── Update QuestionnaireResponse ──────────────────────────────────────────────
-
-
-@router.put(
-    "/{id}",
-    operation_id="update_questionnaire_response",
-    summary="Update an existing QuestionnaireResponse resource (full replacement)",
-    description="""
-Update an existing FHIR QuestionnaireResponse resource by replacing it entirely with the provided payload.
-
-Implements FHIR-standard PUT semantics — the entire resource is replaced.
-All existing items and answers are removed and replaced with the new payload.
-
-Returns 404 if no resource exists with the given ID.
-""",
-    response_description="The updated FHIR QuestionnaireResponse resource.",
-    responses={
-        200: {"description": "QuestionnaireResponse successfully updated."},
-        400: {"description": "Invalid FHIR QuestionnaireResponse payload."},
-        404: {"description": "No QuestionnaireResponse exists with the specified ID."},
-        401: {"description": "Authentication required."},
-        422: {"description": "Validation error."},
-    },
-)
-async def update_questionnaire_response(
-    payload: QuestionnaireResponseCreateSchema,
-    id: int = Path(
-        ...,
-        title="QuestionnaireResponse ID",
-        description="The internal database identifier of the QuestionnaireResponse resource to update.",
-        ge=1,
-    ),
-    service: QuestionnaireResponseService = Depends(get_questionnaire_response_service),
-):
-    try:
-        data_dict = payload.model_dump(exclude_none=True, by_alias=True)
-        result = await service.update_questionnaire_response(id, data_dict)
-        if not result:
-            raise HTTPException(status_code=404, detail="QuestionnaireResponse not found")
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-# ── Delete QuestionnaireResponse ──────────────────────────────────────────────
+# ── Delete QuestionnaireResponse ───────────────────────────────────────────
 
 
 @router.delete(
-    "/{id}",
+    "/{questionnaire_response_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_permission("questionnaire_response", "delete"))],
     operation_id="delete_questionnaire_response",
-    summary="Delete a QuestionnaireResponse resource by ID",
-    description="""
-Permanently delete a FHIR QuestionnaireResponse resource by its internal database ID.
-
-This operation is irreversible. All associated items and answers are deleted via cascade.
-Returns 404 if no resource exists with the given ID.
-
-Returns no content on successful deletion (HTTP 204).
-""",
-    response_description="QuestionnaireResponse successfully deleted. No content returned.",
-    responses={
-        204: {"description": "QuestionnaireResponse successfully deleted."},
-        404: {"description": "No QuestionnaireResponse exists with the specified ID."},
-        401: {"description": "Authentication required."},
-    },
+    summary="Delete a QuestionnaireResponse resource",
 )
 async def delete_questionnaire_response(
-    id: int = Path(
-        ...,
-        title="QuestionnaireResponse ID",
-        description="The internal database identifier of the QuestionnaireResponse resource to delete.",
-        ge=1,
-    ),
-    service: QuestionnaireResponseService = Depends(get_questionnaire_response_service),
+    qr: QuestionnaireResponseModel = Depends(get_authorized_questionnaire_response),
+    qr_service: QuestionnaireResponseService = Depends(get_questionnaire_response_service),
 ):
-    deleted = await service.delete_questionnaire_response(id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="QuestionnaireResponse not found")
+    await qr_service.delete_questionnaire_response(qr.questionnaire_response_id)
     return None

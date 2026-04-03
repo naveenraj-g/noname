@@ -1,190 +1,165 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Path
-from fhir.resources.appointment import Appointment
-from app.services.appointment_service import AppointmentService
-from app.schemas.appointment import AppointmentCreateSchema
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+
+from app.auth.dependencies import require_permission
+from app.auth.appointment_deps import get_authorized_appointment
+from app.core.content_negotiation import format_response, format_list_response
 from app.di.dependencies.appointment import get_appointment_service
+from app.models.appointment import AppointmentModel
+from app.schemas.appointment import (
+    AppointmentCreateSchema,
+    AppointmentPatchSchema,
+    AppointmentResponseSchema,
+)
+from app.services.appointment_service import AppointmentService
 
 router = APIRouter()
 
 
-# ── Create Appointment ─────────────────────────────────────────────────
+# ── Create Appointment ─────────────────────────────────────────────────────
 
 
 @router.post(
     "/",
+    response_model=AppointmentResponseSchema,
+    response_model_exclude_none=True,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("appointment", "create"))],
     operation_id="create_appointment",
-    summary="Create a new FHIR Appointment resource",
-    description="""
-Create a new FHIR Appointment resource representing a scheduled healthcare event.
-
-An Appointment is a booking for a patient and/or practitioner(s) at a specific date and time.
-It can represent clinic visits, follow-ups, procedures, telehealth sessions, and more.
-
-Required fields: `status` and `participant` (at least one entry with a `status`).
-
-Recommended: Include `subject` (Patient reference), `start`/`end` times, `serviceType`, and
-at least one practitioner participant.
-
-Returns the complete FHIR Appointment resource including the server-assigned `id`.
-""",
-    response_description="The newly created FHIR Appointment resource with auto-generated ID.",
-    responses={
-        201: {"description": "Appointment successfully created."},
-        400: {"description": "Invalid FHIR Appointment payload."},
-        401: {"description": "Authentication required."},
-        422: {"description": "Validation error — malformed or missing required fields."},
-    },
+    summary="Create a new Appointment resource",
+    description="Books an Appointment for a patient and/or practitioner(s). At least one participant is required. References use public IDs (e.g. Patient/10001, Practitioner/30001).",
 )
 async def create_appointment(
     payload: AppointmentCreateSchema,
-    service: AppointmentService = Depends(get_appointment_service),
+    request: Request,
+    appointment_service: AppointmentService = Depends(get_appointment_service),
 ):
-    try:
-        data_dict = payload.model_dump(exclude_none=True, by_alias=True)
-        return await service.create_appointment(data_dict)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    user_id: str = request.state.user.get("sub")
+    org_id: str = request.state.user.get("activeOrganizationId")
+    appointment = await appointment_service.create_appointment(payload, user_id, org_id)
+    return format_response(
+        appointment_service._to_fhir(appointment),
+        appointment_service._to_plain(appointment),
+        request,
+    )
 
 
-# ── Get Appointment by ID ─────────────────────────────────────────────
+# ── Get own Appointments (/me) ─────────────────────────────────────────────
+# Declared before /{appointment_id} to avoid routing conflicts.
 
 
 @router.get(
-    "/{id}",
-    operation_id="get_appointment_by_id",
-    summary="Retrieve an Appointment resource by ID",
-    description="""
-Retrieve a single FHIR Appointment resource by its internal database ID.
+    "/me",
+    response_model=list[AppointmentResponseSchema],
+    response_model_exclude_none=True,
+    dependencies=[Depends(require_permission("appointment", "read"))],
+    operation_id="get_my_appointments",
+    summary="List all Appointment resources for the currently authenticated user",
+)
+async def get_my_appointments(
+    request: Request,
+    appointment_service: AppointmentService = Depends(get_appointment_service),
+):
+    user_id: str = request.state.user.get("sub")
+    org_id: str = request.state.user.get("activeOrganizationId")
+    appointments = await appointment_service.get_me(user_id, org_id)
+    return format_list_response(
+        [appointment_service._to_fhir(a) for a in appointments],
+        [appointment_service._to_plain(a) for a in appointments],
+        request,
+    )
 
-Returns the full Appointment resource including status, schedule, participants, service details,
-and reason codes. Returns 404 if no appointment exists with the given ID.
-""",
-    response_description="The FHIR Appointment resource matching the given ID.",
-    responses={
-        200: {"description": "Appointment found and returned."},
-        404: {"description": "No Appointment exists with the specified ID."},
-        401: {"description": "Authentication required."},
-    },
+
+# ── Get Appointment by public appointment_id ───────────────────────────────
+
+
+@router.get(
+    "/{appointment_id}",
+    response_model=AppointmentResponseSchema,
+    response_model_exclude_none=True,
+    dependencies=[Depends(require_permission("appointment", "read"))],
+    operation_id="get_appointment_by_id",
+    summary="Retrieve an Appointment resource by public appointment_id",
 )
 async def get_appointment(
-    id: int = Path(
-        ...,
-        title="Appointment ID",
-        description="The internal database identifier of the Appointment resource.",
-        ge=1,
-    ),
-    service: AppointmentService = Depends(get_appointment_service),
+    request: Request,
+    appointment: AppointmentModel = Depends(get_authorized_appointment),
+    appointment_service: AppointmentService = Depends(get_appointment_service),
 ):
-    appointment = await service.get_appointment(id)
-    if not appointment:
+    return format_response(
+        appointment_service._to_fhir(appointment),
+        appointment_service._to_plain(appointment),
+        request,
+    )
+
+
+# ── Patch Appointment ──────────────────────────────────────────────────────
+
+
+@router.patch(
+    "/{appointment_id}",
+    response_model=AppointmentResponseSchema,
+    response_model_exclude_none=True,
+    dependencies=[Depends(require_permission("appointment", "update"))],
+    operation_id="patch_appointment",
+    summary="Partially update an Appointment resource",
+    description="Patchable fields: status, start, end, minutes_duration, description, comment, patient_instruction, priority_value. Participants and service fields cannot be changed after creation.",
+)
+async def patch_appointment(
+    payload: AppointmentPatchSchema,
+    request: Request,
+    appointment: AppointmentModel = Depends(get_authorized_appointment),
+    appointment_service: AppointmentService = Depends(get_appointment_service),
+):
+    updated = await appointment_service.patch_appointment(appointment.appointment_id, payload)
+    if not updated:
         raise HTTPException(status_code=404, detail="Appointment not found")
-    return appointment
+    return format_response(
+        appointment_service._to_fhir(updated),
+        appointment_service._to_plain(updated),
+        request,
+    )
 
 
-# ── List All Appointments ─────────────────────────────────────────────
+# ── List Appointments ──────────────────────────────────────────────────────
 
 
 @router.get(
     "/",
+    response_model=list[AppointmentResponseSchema],
+    response_model_exclude_none=True,
+    dependencies=[Depends(require_permission("appointment", "read"))],
     operation_id="list_appointments",
     summary="List all Appointment resources",
-    description="""
-Retrieve a list of all FHIR Appointment resources stored in the system.
-
-Returns an array of complete Appointment resources. Returns an empty array if none exist.
-""",
-    response_description="An array of all FHIR Appointment resources.",
-    responses={
-        200: {"description": "Successfully retrieved the list of appointments."},
-        401: {"description": "Authentication required."},
-    },
+    description="Returns all appointments. Filter by patient using `?patient_id={patient_id}` (public patient_id).",
 )
 async def list_appointments(
-    service: AppointmentService = Depends(get_appointment_service),
+    request: Request,
+    patient_id: Optional[int] = None,
+    appointment_service: AppointmentService = Depends(get_appointment_service),
 ):
-    return await service.list_appointments()
+    appointments = await appointment_service.list_appointments(patient_id=patient_id)
+    return format_list_response(
+        [appointment_service._to_fhir(a) for a in appointments],
+        [appointment_service._to_plain(a) for a in appointments],
+        request,
+    )
 
 
-# ── Update Appointment ────────────────────────────────────────────────
-
-
-@router.put(
-    "/{id}",
-    operation_id="update_appointment",
-    summary="Update an existing Appointment resource (full replacement)",
-    description="""
-Update an existing FHIR Appointment resource by replacing it entirely with the provided payload.
-
-Implements FHIR-standard PUT semantics — the entire resource is replaced. Any fields not
-included will be removed. Required fields: `status` and `participant`.
-
-Returns 404 if no appointment exists with the given ID.
-""",
-    response_description="The updated FHIR Appointment resource.",
-    responses={
-        200: {"description": "Appointment successfully updated."},
-        400: {"description": "Invalid FHIR Appointment payload."},
-        404: {"description": "No Appointment exists with the specified ID."},
-        401: {"description": "Authentication required."},
-        422: {"description": "Validation error."},
-    },
-)
-async def update_appointment(
-    payload: AppointmentCreateSchema,
-    id: int = Path(
-        ...,
-        title="Appointment ID",
-        description="The internal database identifier of the Appointment resource to update.",
-        ge=1,
-    ),
-    service: AppointmentService = Depends(get_appointment_service),
-):
-    try:
-        data_dict = payload.model_dump(exclude_none=True, by_alias=True)
-        result = await service.update_appointment(id, data_dict)
-        if not result:
-            raise HTTPException(status_code=404, detail="Appointment not found")
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-# ── Delete Appointment ────────────────────────────────────────────────
+# ── Delete Appointment ─────────────────────────────────────────────────────
 
 
 @router.delete(
-    "/{id}",
+    "/{appointment_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_permission("appointment", "delete"))],
     operation_id="delete_appointment",
-    summary="Delete an Appointment resource by ID",
-    description="""
-Permanently delete a FHIR Appointment resource by its internal database ID.
-
-This operation is irreversible. All associated participants and reason codes are also
-deleted via cascade. Returns 404 if no appointment exists with the given ID.
-
-Returns no content on successful deletion (HTTP 204).
-""",
-    response_description="Appointment successfully deleted. No content returned.",
-    responses={
-        204: {"description": "Appointment successfully deleted."},
-        404: {"description": "No Appointment exists with the specified ID."},
-        401: {"description": "Authentication required."},
-    },
+    summary="Delete an Appointment resource",
 )
 async def delete_appointment(
-    id: int = Path(
-        ...,
-        title="Appointment ID",
-        description="The internal database identifier of the Appointment resource to delete.",
-        ge=1,
-    ),
-    service: AppointmentService = Depends(get_appointment_service),
+    appointment: AppointmentModel = Depends(get_authorized_appointment),
+    appointment_service: AppointmentService = Depends(get_appointment_service),
 ):
-    deleted = await service.delete_appointment(id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Appointment not found")
+    await appointment_service.delete_appointment(appointment.appointment_id)
     return None

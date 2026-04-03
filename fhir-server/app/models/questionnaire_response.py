@@ -7,18 +7,35 @@ from sqlalchemy import (
     Text,
     Boolean,
     Float,
+    Sequence,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import FHIRBase as Base
 
+questionnaire_response_id_seq = Sequence(
+    "questionnaire_response_id_seq", start=60000, increment=1
+)
+
 
 class QuestionnaireResponseModel(Base):
     __tablename__ = "questionnaire_response"
 
+    # Internal PK — never exposed
     id = Column(Integer, primary_key=True, autoincrement=True, index=True)
-    # user_id = Column(String, nullable=True)
-    org_id = Column(String, nullable=True)
+
+    # Public ID — used in all API responses and FHIR output
+    questionnaire_response_id = Column(
+        Integer,
+        questionnaire_response_id_seq,
+        server_default=questionnaire_response_id_seq.next_value(),
+        unique=True,
+        index=True,
+        nullable=False,
+    )
+
+    user_id = Column(String, nullable=True, index=True)
+    org_id = Column(String, nullable=True, index=True)
 
     # Required
     questionnaire = Column(String, nullable=False)  # canonical URL

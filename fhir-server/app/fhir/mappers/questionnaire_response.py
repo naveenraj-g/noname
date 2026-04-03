@@ -1,0 +1,213 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, List
+
+if TYPE_CHECKING:
+    from app.models.questionnaire_response import (
+        QuestionnaireResponseModel,
+        QuestionnaireResponseItemModel,
+        QuestionnaireResponseAnswerModel,
+    )
+
+
+# ── Answer mapper ──────────────────────────────────────────────────────────
+
+
+def _map_answer_to_fhir(answer: "QuestionnaireResponseAnswerModel") -> dict:
+    vt = answer.value_type
+    data: dict = {}
+
+    if vt == "boolean":
+        data["valueBoolean"] = answer.value_boolean
+    elif vt == "decimal":
+        data["valueDecimal"] = answer.value_decimal
+    elif vt == "integer":
+        data["valueInteger"] = answer.value_integer
+    elif vt == "date":
+        data["valueDate"] = answer.value_string
+    elif vt == "dateTime":
+        data["valueDateTime"] = answer.value_datetime.isoformat() if answer.value_datetime else None
+    elif vt == "time":
+        data["valueTime"] = answer.value_string
+    elif vt == "string":
+        data["valueString"] = answer.value_string
+    elif vt == "uri":
+        data["valueUri"] = answer.value_string
+    elif vt == "coding":
+        coding = {k: v for k, v in {
+            "system": answer.value_coding_system,
+            "code": answer.value_coding_code,
+            "display": answer.value_coding_display,
+        }.items() if v is not None}
+        if coding:
+            data["valueCoding"] = coding
+    elif vt == "quantity":
+        qty = {k: v for k, v in {
+            "value": answer.value_quantity_value,
+            "unit": answer.value_quantity_unit,
+            "system": answer.value_quantity_system,
+            "code": answer.value_quantity_code,
+        }.items() if v is not None}
+        if qty:
+            data["valueQuantity"] = qty
+    elif vt == "reference":
+        ref: dict = {}
+        if answer.value_reference:
+            ref["reference"] = answer.value_reference
+        if answer.value_reference_display:
+            ref["display"] = answer.value_reference_display
+        if ref:
+            data["valueReference"] = ref
+
+    return data
+
+
+def _map_answer_to_plain(answer: "QuestionnaireResponseAnswerModel") -> dict:
+    vt = answer.value_type
+    data: dict = {"value_type": vt}
+
+    if vt == "boolean":
+        data["value_boolean"] = answer.value_boolean
+    elif vt == "decimal":
+        data["value_decimal"] = answer.value_decimal
+    elif vt == "integer":
+        data["value_integer"] = answer.value_integer
+    elif vt in ("date", "time", "string", "uri"):
+        data["value_string"] = answer.value_string
+    elif vt == "dateTime":
+        data["value_datetime"] = answer.value_datetime.isoformat() if answer.value_datetime else None
+    elif vt == "coding":
+        data["value_coding"] = {k: v for k, v in {
+            "system": answer.value_coding_system,
+            "code": answer.value_coding_code,
+            "display": answer.value_coding_display,
+        }.items() if v is not None}
+    elif vt == "quantity":
+        data["value_quantity"] = {k: v for k, v in {
+            "value": answer.value_quantity_value,
+            "unit": answer.value_quantity_unit,
+            "system": answer.value_quantity_system,
+            "code": answer.value_quantity_code,
+        }.items() if v is not None}
+    elif vt == "reference":
+        data["value_reference"] = answer.value_reference
+        if answer.value_reference_display:
+            data["value_reference_display"] = answer.value_reference_display
+
+    return {k: v for k, v in data.items() if v is not None}
+
+
+# ── Item mapper ────────────────────────────────────────────────────────────
+
+
+def _map_item_to_fhir(item: "QuestionnaireResponseItemModel") -> dict:
+    data: dict = {"linkId": item.link_id}
+    if item.text:
+        data["text"] = item.text
+    if item.definition:
+        data["definition"] = item.definition
+    if item.answers:
+        data["answer"] = [_map_answer_to_fhir(a) for a in item.answers]
+    if item.sub_items:
+        data["item"] = [_map_item_to_fhir(sub) for sub in item.sub_items]
+    return data
+
+
+def _map_item_to_plain(item: "QuestionnaireResponseItemModel") -> dict:
+    data: dict = {"link_id": item.link_id}
+    if item.text:
+        data["text"] = item.text
+    if item.definition:
+        data["definition"] = item.definition
+    if item.answers:
+        data["answer"] = [_map_answer_to_plain(a) for a in item.answers]
+    if item.sub_items:
+        data["item"] = [_map_item_to_plain(sub) for sub in item.sub_items]
+    return data
+
+
+# ── Top-level mappers ──────────────────────────────────────────────────────
+
+
+def to_fhir_questionnaire_response(qr: "QuestionnaireResponseModel") -> dict:
+    """
+    Convert QuestionnaireResponseModel (with relationships loaded) to a
+    FHIR R4 QuestionnaireResponse dict.
+
+    Rules:
+      - Uses questionnaire_response_id (public) as FHIR logical id.
+      - References reconstructed from stored flat reference strings.
+      - Nested items reconstructed from sub_items relationships.
+    """
+    result: dict = {
+        "resourceType": "QuestionnaireResponse",
+        "id": str(qr.questionnaire_response_id),
+        "questionnaire": qr.questionnaire,
+        "status": qr.status,
+    }
+
+    if qr.subject_reference:
+        subject: dict = {"reference": qr.subject_reference}
+        if qr.subject_display:
+            subject["display"] = qr.subject_display
+        result["subject"] = subject
+
+    if qr.encounter_reference:
+        result["encounter"] = {"reference": qr.encounter_reference}
+
+    if qr.authored:
+        result["authored"] = qr.authored.isoformat()
+
+    if qr.author_reference:
+        author: dict = {"reference": qr.author_reference}
+        if qr.author_display:
+            author["display"] = qr.author_display
+        result["author"] = author
+
+    if qr.source_reference:
+        source: dict = {"reference": qr.source_reference}
+        if qr.source_display:
+            source["display"] = qr.source_display
+        result["source"] = source
+
+    # Only emit top-level items (parent_item_id is None); sub_items carry the children
+    top_level = [i for i in qr.items if i.parent_item_id is None]
+    if top_level:
+        result["item"] = [_map_item_to_fhir(i) for i in top_level]
+
+    return {k: v for k, v in result.items() if v is not None}
+
+
+def to_plain_questionnaire_response(qr: "QuestionnaireResponseModel") -> dict:
+    """
+    Return the QuestionnaireResponse as a flat snake_case JSON object.
+    Uses public questionnaire_response_id as `id`.
+    """
+    result: dict = {
+        "id": qr.questionnaire_response_id,
+        "questionnaire": qr.questionnaire,
+        "status": qr.status,
+    }
+
+    if qr.subject_reference:
+        result["subject"] = qr.subject_reference
+    if qr.subject_display:
+        result["subject_display"] = qr.subject_display
+    if qr.encounter_reference:
+        result["encounter"] = qr.encounter_reference
+    if qr.authored:
+        result["authored"] = qr.authored.isoformat()
+    if qr.author_reference:
+        result["author"] = qr.author_reference
+    if qr.author_display:
+        result["author_display"] = qr.author_display
+    if qr.source_reference:
+        result["source"] = qr.source_reference
+    if qr.source_display:
+        result["source_display"] = qr.source_display
+
+    top_level = [i for i in qr.items if i.parent_item_id is None]
+    if top_level:
+        result["item"] = [_map_item_to_plain(i) for i in top_level]
+
+    return result

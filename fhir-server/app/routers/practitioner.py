@@ -1,218 +1,309 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Path
-from fhir.resources.practitioner import Practitioner
-from app.services.practitioner_service import PractitionerService
-from app.schemas.practitioner import PractitionerCreateSchema
-from app.di.dependencies.practitioner import get_practitioner_service
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+
 from app.auth.dependencies import require_permission
+from app.auth.practitioner_deps import get_authorized_practitioner
+from app.core.content_negotiation import format_response, format_list_response
+from app.di.dependencies.practitioner import get_practitioner_service
+from app.models.practitioner import PractitionerModel
+from app.schemas.practitioner import (
+    PractitionerCreateSchema,
+    PractitionerPatchSchema,
+    PractitionerResponseSchema,
+    PractitionerIdentifierCreate,
+    PractitionerNameCreate,
+    PractitionerTelecomCreate,
+    PractitionerAddressCreate,
+    PractitionerQualificationCreate,
+)
+from app.services.practitioner_service import PractitionerService
 
 router = APIRouter()
 
 
-# ── Create Practitioner ────────────────────────────────────────────────
+# ── Create Practitioner ────────────────────────────────────────────────────
 
 
 @router.post(
     "/",
-    response_model=Practitioner,
-    dependencies=[Depends(require_permission("practitioner", "create"))],
+    response_model=PractitionerResponseSchema,
+    response_model_exclude_none=True,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("practitioner", "create"))],
     operation_id="create_practitioner",
-    summary="Create a new FHIR Practitioner resource",
-    description="""
-Create a new FHIR Practitioner resource in the system. Requires `practitioner:create` permission.
-
-This endpoint accepts a structured Practitioner payload conforming to the HL7 FHIR R4
-specification, validates it against the FHIR Practitioner schema, and persists it to the
-database. The server auto-generates a unique internal ID for the resource.
-
-A Practitioner represents a person who is directly or indirectly involved in the
-provisioning of healthcare — including physicians, nurses, pharmacists, and administrative staff.
-
-Recommended fields include at least one `name` with professional prefix (e.g., "Dr."),
-`gender`, `telecom` (work phone/email), and `qualification` entries.
-
-Returns the complete FHIR Practitioner resource including the server-assigned `id`.
-""",
-    response_description="The newly created FHIR Practitioner resource with auto-generated ID.",
-    responses={
-        201: {"description": "Practitioner successfully created and persisted to the database."},
-        400: {"description": "Invalid FHIR Practitioner payload — failed FHIR schema validation."},
-        401: {"description": "Authentication required — missing or invalid authorization credentials."},
-        422: {"description": "Validation error — the request body is malformed or missing required fields."},
-    },
+    summary="Create a new Practitioner resource",
+    description="Creates a Practitioner with core demographics. Add names, identifiers, telecom, addresses, and qualifications via the sub-resource endpoints.",
 )
 async def create_practitioner(
     payload: PractitionerCreateSchema,
+    request: Request,
     practitioner_service: PractitionerService = Depends(get_practitioner_service),
 ):
-    data_dict = payload.model_dump(exclude_none=True)
-    try:
-        validated_fhir_resource = Practitioner.model_validate(data_dict)
-        return await practitioner_service.create_practitioner(
-            validated_fhir_resource.model_dump()
-        )
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    user_id: str = request.state.user.get("sub")
+    org_id: str = request.state.user.get("activeOrganizationId")
+    practitioner = await practitioner_service.create_practitioner(payload, user_id, org_id)
+    return format_response(
+        practitioner_service._to_fhir(practitioner),
+        practitioner_service._to_plain(practitioner),
+        request,
+    )
 
 
-# ── Get Practitioner by ID ─────────────────────────────────────────────
+# ── Get own Practitioner profile (/me) ────────────────────────────────────
+# Declared before /{practitioner_id} so "me" is not matched by the int path param.
 
 
 @router.get(
-    "/{id}",
-    response_model=Practitioner,
+    "/me",
+    response_model=PractitionerResponseSchema,
+    response_model_exclude_none=True,
     dependencies=[Depends(require_permission("practitioner", "read"))],
-    operation_id="get_practitioner_by_id",
-    summary="Retrieve a Practitioner resource by ID",
-    description="""
-Retrieve a single FHIR Practitioner resource by its internal database ID. Requires `practitioner:read` permission.
-
-Returns the full Practitioner resource including all demographics, identifiers, contact
-information, addresses, and professional qualifications. Returns 404 if no practitioner
-exists with the given ID.
-""",
-    response_description="The FHIR Practitioner resource matching the given ID.",
-    responses={
-        200: {"description": "Practitioner resource found and returned successfully."},
-        404: {"description": "No Practitioner resource exists with the specified ID."},
-        401: {"description": "Authentication required — missing or invalid authorization credentials."},
-    },
+    operation_id="get_my_practitioner_profile",
+    summary="Get the Practitioner profile for the currently authenticated user",
 )
-async def get_practitioner(
-    id: int = Path(
-        ...,
-        title="Practitioner ID",
-        description="The internal database identifier of the Practitioner resource. Must be a positive integer.",
-        examples=[456],
-        ge=1,
-    ),
+async def get_my_practitioner_profile(
+    request: Request,
     practitioner_service: PractitionerService = Depends(get_practitioner_service),
 ):
-    practitioner = await practitioner_service.get_practitioner(id)
+    user_id: str = request.state.user.get("sub")
+    org_id: str = request.state.user.get("activeOrganizationId")
+    practitioner = await practitioner_service.get_me(user_id, org_id)
     if not practitioner:
+        raise HTTPException(status_code=404, detail="Practitioner profile not found")
+    return format_response(
+        practitioner_service._to_fhir(practitioner),
+        practitioner_service._to_plain(practitioner),
+        request,
+    )
+
+
+# ── Get Practitioner by public practitioner_id ─────────────────────────────
+
+
+@router.get(
+    "/{practitioner_id}",
+    response_model=PractitionerResponseSchema,
+    response_model_exclude_none=True,
+    dependencies=[Depends(require_permission("practitioner", "read"))],
+    operation_id="get_practitioner_by_id",
+    summary="Retrieve a Practitioner resource by public practitioner_id",
+)
+async def get_practitioner(
+    request: Request,
+    practitioner: PractitionerModel = Depends(get_authorized_practitioner),
+    practitioner_service: PractitionerService = Depends(get_practitioner_service),
+):
+    return format_response(
+        practitioner_service._to_fhir(practitioner),
+        practitioner_service._to_plain(practitioner),
+        request,
+    )
+
+
+# ── Patch Practitioner ─────────────────────────────────────────────────────
+
+
+@router.patch(
+    "/{practitioner_id}",
+    response_model=PractitionerResponseSchema,
+    response_model_exclude_none=True,
+    dependencies=[Depends(require_permission("practitioner", "update"))],
+    operation_id="patch_practitioner",
+    summary="Partially update a Practitioner resource",
+    description="Only supplied fields are written. Omitted fields are unchanged.",
+)
+async def patch_practitioner(
+    payload: PractitionerPatchSchema,
+    request: Request,
+    practitioner: PractitionerModel = Depends(get_authorized_practitioner),
+    practitioner_service: PractitionerService = Depends(get_practitioner_service),
+):
+    updated = await practitioner_service.patch_practitioner(practitioner.practitioner_id, payload)
+    if not updated:
         raise HTTPException(status_code=404, detail="Practitioner not found")
-    return practitioner
+    return format_response(
+        practitioner_service._to_fhir(updated),
+        practitioner_service._to_plain(updated),
+        request,
+    )
 
 
-# ── List All Practitioners ─────────────────────────────────────────────
+# ── List Practitioners ─────────────────────────────────────────────────────
 
 
 @router.get(
     "/",
-    response_model=list[Practitioner],
+    response_model=list[PractitionerResponseSchema],
+    response_model_exclude_none=True,
     dependencies=[Depends(require_permission("practitioner", "read"))],
     operation_id="list_practitioners",
     summary="List all Practitioner resources",
-    description="""
-Retrieve a list of all FHIR Practitioner resources stored in the system. Requires `practitioner:read` permission.
-
-Returns an array of complete Practitioner resources. Each resource includes all demographics,
-identifiers, contact information, addresses, and professional qualifications.
-
-Returns an empty array if no practitioners exist.
-""",
-    response_description="An array of all FHIR Practitioner resources in the system.",
-    responses={
-        200: {"description": "Successfully retrieved the list of practitioners."},
-        401: {"description": "Authentication required — missing or invalid authorization credentials."},
-    },
 )
 async def list_practitioners(
+    request: Request,
     practitioner_service: PractitionerService = Depends(get_practitioner_service),
 ):
-    return await practitioner_service.list_practitioners()
+    practitioners = await practitioner_service.list_practitioners()
+    return format_list_response(
+        [practitioner_service._to_fhir(p) for p in practitioners],
+        [practitioner_service._to_plain(p) for p in practitioners],
+        request,
+    )
 
 
-# ── Update Practitioner ────────────────────────────────────────────────
-
-
-@router.put(
-    "/{id}",
-    response_model=Practitioner,
-    dependencies=[Depends(require_permission("practitioner", "update"))],
-    operation_id="update_practitioner",
-    summary="Update an existing Practitioner resource (full replacement)",
-    description="""
-Update an existing FHIR Practitioner resource by replacing it entirely with the provided payload. Requires `practitioner:update` permission.
-
-This implements FHIR-standard PUT semantics — the entire resource is replaced, not merged.
-Any fields not included in the request body will be removed from the resource. To preserve
-existing data, include all current fields in the request.
-
-The `id` path parameter identifies the practitioner to update. Returns 404 if no
-practitioner exists with the given ID.
-""",
-    response_description="The updated FHIR Practitioner resource after full replacement.",
-    responses={
-        200: {"description": "Practitioner resource successfully updated."},
-        400: {"description": "Invalid FHIR Practitioner payload — failed FHIR schema validation."},
-        404: {"description": "No Practitioner resource exists with the specified ID."},
-        401: {"description": "Authentication required — missing or invalid authorization credentials."},
-        422: {"description": "Validation error — the request body is malformed or missing required fields."},
-    },
-)
-async def update_practitioner(
-    payload: PractitionerCreateSchema,
-    id: int = Path(
-        ...,
-        title="Practitioner ID",
-        description="The internal database identifier of the Practitioner resource to update. Must be a positive integer.",
-        examples=[456],
-        ge=1,
-    ),
-    practitioner_service: PractitionerService = Depends(get_practitioner_service),
-):
-    data_dict = payload.model_dump(exclude_none=True)
-    try:
-        validated_fhir_resource = Practitioner.model_validate(data_dict)
-        result = await practitioner_service.update_practitioner(
-            id, validated_fhir_resource.model_dump()
-        )
-        if not result:
-            raise HTTPException(status_code=404, detail="Practitioner not found")
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-# ── Delete Practitioner ────────────────────────────────────────────────
+# ── Delete Practitioner ────────────────────────────────────────────────────
 
 
 @router.delete(
-    "/{id}",
+    "/{practitioner_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(require_permission("practitioner", "delete"))],
     operation_id="delete_practitioner",
-    summary="Delete a Practitioner resource by ID",
-    description="""
-Permanently delete a FHIR Practitioner resource by its internal database ID. Requires `practitioner:delete` permission.
-
-This operation is irreversible. All associated data (identifiers, names, telecoms,
-addresses, qualifications) will also be deleted via cascade. Returns 404 if no
-practitioner exists with the given ID.
-
-Returns no content on successful deletion (HTTP 204).
-""",
-    response_description="Practitioner resource successfully deleted. No content returned.",
-    responses={
-        204: {"description": "Practitioner resource successfully deleted."},
-        404: {"description": "No Practitioner resource exists with the specified ID."},
-        401: {"description": "Authentication required — missing or invalid authorization credentials."},
-    },
+    summary="Delete a Practitioner resource",
 )
 async def delete_practitioner(
-    id: int = Path(
-        ...,
-        title="Practitioner ID",
-        description="The internal database identifier of the Practitioner resource to delete. Must be a positive integer.",
-        examples=[456],
-        ge=1,
-    ),
+    practitioner: PractitionerModel = Depends(get_authorized_practitioner),
     practitioner_service: PractitionerService = Depends(get_practitioner_service),
 ):
-    deleted = await practitioner_service.delete_practitioner(id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Practitioner not found")
+    await practitioner_service.delete_practitioner(practitioner.practitioner_id)
     return None
+
+
+# ── Sub-resource: Identifiers ──────────────────────────────────────────────
+
+
+@router.post(
+    "/{practitioner_id}/identifiers",
+    response_model=PractitionerResponseSchema,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("practitioner", "update"))],
+    operation_id="add_practitioner_identifier",
+    summary="Add a business identifier to a Practitioner (e.g. NPI, license number)",
+)
+async def add_identifier(
+    payload: PractitionerIdentifierCreate,
+    request: Request,
+    practitioner: PractitionerModel = Depends(get_authorized_practitioner),
+    practitioner_service: PractitionerService = Depends(get_practitioner_service),
+):
+    updated = await practitioner_service.add_identifier(practitioner.practitioner_id, payload)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Practitioner not found")
+    return format_response(
+        practitioner_service._to_fhir(updated),
+        practitioner_service._to_plain(updated),
+        request,
+    )
+
+
+# ── Sub-resource: Names ────────────────────────────────────────────────────
+
+
+@router.post(
+    "/{practitioner_id}/names",
+    response_model=PractitionerResponseSchema,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("practitioner", "update"))],
+    operation_id="add_practitioner_name",
+    summary="Add a name to a Practitioner",
+)
+async def add_name(
+    payload: PractitionerNameCreate,
+    request: Request,
+    practitioner: PractitionerModel = Depends(get_authorized_practitioner),
+    practitioner_service: PractitionerService = Depends(get_practitioner_service),
+):
+    updated = await practitioner_service.add_name(practitioner.practitioner_id, payload)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Practitioner not found")
+    return format_response(
+        practitioner_service._to_fhir(updated),
+        practitioner_service._to_plain(updated),
+        request,
+    )
+
+
+# ── Sub-resource: Telecom ──────────────────────────────────────────────────
+
+
+@router.post(
+    "/{practitioner_id}/telecom",
+    response_model=PractitionerResponseSchema,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("practitioner", "update"))],
+    operation_id="add_practitioner_telecom",
+    summary="Add a contact point (telecom) to a Practitioner",
+)
+async def add_telecom(
+    payload: PractitionerTelecomCreate,
+    request: Request,
+    practitioner: PractitionerModel = Depends(get_authorized_practitioner),
+    practitioner_service: PractitionerService = Depends(get_practitioner_service),
+):
+    updated = await practitioner_service.add_telecom(practitioner.practitioner_id, payload)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Practitioner not found")
+    return format_response(
+        practitioner_service._to_fhir(updated),
+        practitioner_service._to_plain(updated),
+        request,
+    )
+
+
+# ── Sub-resource: Addresses ────────────────────────────────────────────────
+
+
+@router.post(
+    "/{practitioner_id}/addresses",
+    response_model=PractitionerResponseSchema,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("practitioner", "update"))],
+    operation_id="add_practitioner_address",
+    summary="Add an address to a Practitioner",
+)
+async def add_address(
+    payload: PractitionerAddressCreate,
+    request: Request,
+    practitioner: PractitionerModel = Depends(get_authorized_practitioner),
+    practitioner_service: PractitionerService = Depends(get_practitioner_service),
+):
+    updated = await practitioner_service.add_address(practitioner.practitioner_id, payload)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Practitioner not found")
+    return format_response(
+        practitioner_service._to_fhir(updated),
+        practitioner_service._to_plain(updated),
+        request,
+    )
+
+
+# ── Sub-resource: Qualifications ───────────────────────────────────────────
+
+
+@router.post(
+    "/{practitioner_id}/qualifications",
+    response_model=PractitionerResponseSchema,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("practitioner", "update"))],
+    operation_id="add_practitioner_qualification",
+    summary="Add a professional qualification to a Practitioner",
+    description="Records a degree, certification, accreditation, or license — e.g. MD, board certification, DEA number.",
+)
+async def add_qualification(
+    payload: PractitionerQualificationCreate,
+    request: Request,
+    practitioner: PractitionerModel = Depends(get_authorized_practitioner),
+    practitioner_service: PractitionerService = Depends(get_practitioner_service),
+):
+    updated = await practitioner_service.add_qualification(practitioner.practitioner_id, payload)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Practitioner not found")
+    return format_response(
+        practitioner_service._to_fhir(updated),
+        practitioner_service._to_plain(updated),
+        request,
+    )

@@ -1,16 +1,33 @@
-from sqlalchemy import Column, String, DateTime, Integer, Enum, ForeignKey
+from sqlalchemy import Column, String, DateTime, Integer, Enum, ForeignKey, Sequence
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import FHIRBase as Base
 from app.models.enums import SubjectReferenceType, ParticipantReferenceType
 
+encounter_id_seq = Sequence("encounter_id_seq", start=20000, increment=1)
+
 
 class EncounterModel(Base):
     __tablename__ = "encounter"
 
+    # Internal PK — never exposed
     id = Column(Integer, primary_key=True, autoincrement=True, index=True)
-    user_id = Column(String, nullable=True)
-    org_id = Column(String, nullable=True)
+
+    # Public ID — used in all API responses and FHIR output
+    encounter_id = Column(
+        Integer,
+        encounter_id_seq,
+        server_default=encounter_id_seq.next_value(),
+        unique=True,
+        index=True,
+        nullable=False,
+    )
+
+    # Direct FK to patient (non-polymorphic for the primary patient relationship)
+    patient_id = Column(Integer, ForeignKey("patient.id"), nullable=True, index=True)
+
+    user_id = Column(String, nullable=True, index=True)
+    org_id = Column(String, nullable=True, index=True)
     status = Column(String, nullable=True)  # planned, in-progress, finished, cancelled
     class_code = Column(String, nullable=True)  # inpatient, outpatient, emergency, etc.
     priority = Column(String, nullable=True)

@@ -1,14 +1,28 @@
-from sqlalchemy import Column, String, Date, Boolean, ForeignKey, Integer, DateTime
+from sqlalchemy import Column, String, Date, Boolean, ForeignKey, Integer, DateTime, Sequence
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import FHIRBase as Base
+
+practitioner_id_seq = Sequence("practitioner_id_seq", start=30000, increment=1)
 
 
 class PractitionerModel(Base):
     __tablename__ = "practitioner"
 
+    # Internal PK — never exposed outside the backend
     id = Column(Integer, primary_key=True, autoincrement=True, index=True)
-    user_id = Column(String, nullable=True)
+
+    # Public ID — used in all API responses and FHIR output
+    practitioner_id = Column(
+        Integer,
+        practitioner_id_seq,
+        server_default=practitioner_id_seq.next_value(),
+        unique=True,
+        index=True,
+        nullable=False,
+    )
+
+    user_id = Column(String, nullable=True, index=True)
     org_id = Column(String, nullable=True)
     active = Column(Boolean, nullable=True)
     gender = Column(String, nullable=True)

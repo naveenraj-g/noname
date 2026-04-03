@@ -1,15 +1,29 @@
-from sqlalchemy import Column, String, DateTime, Integer, ForeignKey, Text
+from sqlalchemy import Column, String, DateTime, Integer, ForeignKey, Text, Sequence
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import FHIRBase as Base
+
+appointment_id_seq = Sequence("appointment_id_seq", start=40000, increment=1)
 
 
 class AppointmentModel(Base):
     __tablename__ = "appointment"
 
+    # Internal PK — never exposed
     id = Column(Integer, primary_key=True, autoincrement=True, index=True)
-    user_id = Column(String, nullable=True)
-    org_id = Column(String, nullable=True)
+
+    # Public ID — used in all API responses and FHIR output
+    appointment_id = Column(
+        Integer,
+        appointment_id_seq,
+        server_default=appointment_id_seq.next_value(),
+        unique=True,
+        index=True,
+        nullable=False,
+    )
+
+    user_id = Column(String, nullable=True, index=True)
+    org_id = Column(String, nullable=True, index=True)
 
     # Required
     status = Column(String, nullable=False)  # proposed | pending | booked | arrived | fulfilled | cancelled | noshow | entered-in-error | checked-in | waitlist

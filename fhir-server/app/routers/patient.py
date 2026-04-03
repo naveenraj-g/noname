@@ -1,224 +1,249 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Path
-from app.services.patient_service import PatientService
-from app.schemas.resources.patient import PatientCreateSchema, PatientResponseSchema
-from app.di.dependencies.patient import get_patient_service
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+
 from app.auth.dependencies import require_permission
+from app.auth.patient_deps import get_authorized_patient
+from app.core.content_negotiation import format_response, format_list_response
+from app.di.dependencies.patient import get_patient_service
+from app.models.patient import PatientModel
+from app.schemas.resources import (
+    PatientCreateSchema,
+    PatientPatchSchema,
+    PatientResponseSchema,
+    IdentifierCreate,
+    TelecomCreate,
+    AddressCreate,
+)
+from app.services.patient_service import PatientService
 
 router = APIRouter()
 
 
-# ── Create Patient ─────────────────────────────────────────────────────
+# ── Create Patient ─────────────────────────────────────────────────────────
 
 
 @router.post(
     "/",
     response_model=PatientResponseSchema,
     response_model_exclude_none=True,
-    dependencies=[Depends(require_permission("patient", "create"))],
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("patient", "create"))],
     operation_id="create_patient",
-    summary="Create a new FHIR Patient resource",
-    description="""
-Create a new FHIR Patient resource in the system. Requires `patient:create` permission.
-
-This endpoint accepts a structured Patient payload conforming to the HL7 FHIR R4 specification,
-validates it against the FHIR Patient schema, and persists it to the database. The server
-auto-generates a unique internal ID for the resource.
-
-The payload must include a `resourceType` of "Patient". Recommended fields include at least
-one `name` with `use: "official"`, a `gender`, and a `birthDate`. Additional fields such as
-`identifier`, `telecom`, and `address` provide richer demographic data.
-
-Returns the complete FHIR Patient resource including the server-assigned `id`.
-""",
-    response_description="The newly created FHIR Patient resource with auto-generated ID.",
-    responses={
-        201: {
-            "description": "Patient successfully created and persisted to the database."
-        },
-        400: {
-            "description": "Invalid FHIR Patient payload — the request body failed FHIR schema validation."
-        },
-        401: {
-            "description": "Authentication required — missing or invalid authorization credentials."
-        },
-        422: {
-            "description": "Validation error — the request body is malformed or missing required fields."
-        },
-    },
+    summary="Create a new Patient resource",
 )
 async def create_patient(
     payload: PatientCreateSchema,
+    request: Request,
     patient_service: PatientService = Depends(get_patient_service),
 ):
-    return await patient_service.create_patient(payload)
+    user_id: str = request.state.user.get("sub")
+    org_id: str = request.state.user.get("activeOrganizationId")
+    patient = await patient_service.create_patient(payload, user_id, org_id)
+    return format_response(
+        patient_service._to_fhir(patient),
+        patient_service._to_plain(patient),
+        request,
+    )
 
 
-# ── Get Patient by ID ──────────────────────────────────────────────────
+# ── Get own Patient profile (/me) ──────────────────────────────────────────
+# Declared before /{patient_id} so "me" is not matched by the int path param.
 
 
 @router.get(
-    "/{id}",
+    "/me",
+    response_model=PatientResponseSchema,
+    response_model_exclude_none=True,
+    dependencies=[Depends(require_permission("patient", "read"))],
+    operation_id="get_my_patient_profile",
+    summary="Get the Patient profile for the currently authenticated user",
+)
+async def get_my_patient_profile(
+    request: Request,
+    patient_service: PatientService = Depends(get_patient_service),
+):
+    user_id: str = request.state.user.get("sub")
+    org_id: str = request.state.user.get("activeOrganizationId")
+    patient = await patient_service.get_me(user_id, org_id)
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient profile not found")
+    return format_response(
+        patient_service._to_fhir(patient),
+        patient_service._to_plain(patient),
+        request,
+    )
+
+
+# ── Get Patient by public patient_id ──────────────────────────────────────
+
+
+@router.get(
+    "/{patient_id}",
     response_model=PatientResponseSchema,
     response_model_exclude_none=True,
     dependencies=[Depends(require_permission("patient", "read"))],
     operation_id="get_patient_by_id",
-    summary="Retrieve a Patient resource by ID",
-    description="""
-Retrieve a single FHIR Patient resource by its internal database ID. Requires `patient:read` permission.
-
-Returns the full Patient resource including all demographics, identifiers, contact
-information, and addresses. Returns 404 if no patient exists with the given ID.
-""",
-    response_description="The FHIR Patient resource matching the given ID.",
-    responses={
-        200: {"description": "Patient resource found and returned successfully."},
-        404: {"description": "No Patient resource exists with the specified ID."},
-        401: {
-            "description": "Authentication required — missing or invalid authorization credentials."
-        },
-    },
+    summary="Retrieve a Patient resource by public patient_id",
 )
 async def get_patient(
-    id: int = Path(
-        ...,
-        title="Patient ID",
-        description="The internal database identifier of the Patient resource. Must be a positive integer.",
-        examples=[123],
-        ge=1,
-    ),
+    request: Request,
+    patient: PatientModel = Depends(get_authorized_patient),
     patient_service: PatientService = Depends(get_patient_service),
 ):
-    patient = await patient_service.get_patient(id)
-    if not patient:
+    return format_response(
+        patient_service._to_fhir(patient),
+        patient_service._to_plain(patient),
+        request,
+    )
+
+
+# ── Patch Patient ──────────────────────────────────────────────────────────
+
+
+@router.patch(
+    "/{patient_id}",
+    response_model=PatientResponseSchema,
+    response_model_exclude_none=True,
+    dependencies=[Depends(require_permission("patient", "update"))],
+    operation_id="patch_patient",
+    summary="Partially update a Patient resource",
+    description="Only supplied fields are written. Omitted fields are unchanged.",
+)
+async def patch_patient(
+    payload: PatientPatchSchema,
+    request: Request,
+    patient: PatientModel = Depends(get_authorized_patient),
+    patient_service: PatientService = Depends(get_patient_service),
+):
+    updated = await patient_service.patch_patient(patient.patient_id, payload)
+    if not updated:
         raise HTTPException(status_code=404, detail="Patient not found")
-    return patient
+    return format_response(
+        patient_service._to_fhir(updated),
+        patient_service._to_plain(updated),
+        request,
+    )
 
 
-# ── List All Patients ──────────────────────────────────────────────────
+# ── List Patients ──────────────────────────────────────────────────────────
 
 
 @router.get(
     "/",
     response_model=list[PatientResponseSchema],
+    response_model_exclude_none=True,
     dependencies=[Depends(require_permission("patient", "read"))],
     operation_id="list_patients",
     summary="List all Patient resources",
-    description="""
-Retrieve a list of all FHIR Patient resources stored in the system. Requires `patient:read` permission.
-
-Returns an array of complete Patient resources. Each resource includes all demographics,
-identifiers, contact information, and addresses.
-
-Returns an empty array if no patients exist.
-""",
-    response_description="An array of all FHIR Patient resources in the system.",
-    responses={
-        200: {"description": "Successfully retrieved the list of patients."},
-        401: {
-            "description": "Authentication required — missing or invalid authorization credentials."
-        },
-        403: {
-            "description": "Insufficient permissions — requires patient:read permission."
-        },
-    },
-    response_model_exclude_none=True,
 )
 async def list_patients(
+    request: Request,
     patient_service: PatientService = Depends(get_patient_service),
 ):
-    return await patient_service.list_patients()
+    patients = await patient_service.list_patients()
+    return format_list_response(
+        [patient_service._to_fhir(p) for p in patients],
+        [patient_service._to_plain(p) for p in patients],
+        request,
+    )
 
 
-# ── Update Patient ─────────────────────────────────────────────────────
-
-
-@router.put(
-    "/{id}",
-    response_model=PatientResponseSchema,
-    response_model_exclude_none=True,
-    dependencies=[Depends(require_permission("patient", "update"))],
-    operation_id="update_patient",
-    summary="Update an existing Patient resource (full replacement)",
-    description="""
-Update an existing FHIR Patient resource by replacing it entirely with the provided payload. Requires `patient:update` permission.
-
-This implements FHIR-standard PUT semantics — the entire resource is replaced, not merged.
-Any fields not included in the request body will be removed from the resource. To preserve
-existing data, include all current fields in the request.
-
-The `id` path parameter identifies the patient to update. The request body must be a valid
-FHIR Patient resource. Returns 404 if no patient exists with the given ID.
-""",
-    response_description="The updated FHIR Patient resource after full replacement.",
-    responses={
-        200: {"description": "Patient resource successfully updated."},
-        400: {
-            "description": "Invalid FHIR Patient payload — failed FHIR schema validation."
-        },
-        404: {"description": "No Patient resource exists with the specified ID."},
-        401: {
-            "description": "Authentication required — missing or invalid authorization credentials."
-        },
-        422: {
-            "description": "Validation error — the request body is malformed or missing required fields."
-        },
-    },
-)
-async def update_patient(
-    payload: PatientCreateSchema,
-    id: int = Path(
-        ...,
-        title="Patient ID",
-        description="The internal database identifier of the Patient resource to update. Must be a positive integer.",
-        examples=[123],
-        ge=1,
-    ),
-    patient_service: PatientService = Depends(get_patient_service),
-):
-    result = await patient_service.update_patient(id, payload)
-    if not result:
-        raise HTTPException(status_code=404, detail="Patient not found")
-    return result
-
-
-# ── Delete Patient ─────────────────────────────────────────────────────
+# ── Delete Patient ─────────────────────────────────────────────────────────
 
 
 @router.delete(
-    "/{id}",
+    "/{patient_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(require_permission("patient", "delete"))],
     operation_id="delete_patient",
-    summary="Delete a Patient resource by ID",
-    description="""
-Permanently delete a FHIR Patient resource by its internal database ID. Requires `patient:delete` permission.
-
-This operation is irreversible. All associated data (identifiers, names, telecoms,
-addresses) will also be deleted via cascade. Returns 404 if no patient exists with the given ID.
-
-Returns no content on successful deletion (HTTP 204).
-""",
-    response_description="Patient resource successfully deleted. No content returned.",
-    responses={
-        204: {"description": "Patient resource successfully deleted."},
-        404: {"description": "No Patient resource exists with the specified ID."},
-        401: {
-            "description": "Authentication required — missing or invalid authorization credentials."
-        },
-    },
+    summary="Delete a Patient resource",
 )
 async def delete_patient(
-    id: int = Path(
-        ...,
-        title="Patient ID",
-        description="The internal database identifier of the Patient resource to delete. Must be a positive integer.",
-        examples=[123],
-        ge=1,
-    ),
+    patient: PatientModel = Depends(get_authorized_patient),
     patient_service: PatientService = Depends(get_patient_service),
 ):
-    deleted = await patient_service.delete_patient(id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Patient not found")
+    await patient_service.delete_patient(patient.patient_id)
     return None
+
+
+# ── Sub-resource: Identifiers ──────────────────────────────────────────────
+
+
+@router.post(
+    "/{patient_id}/identifiers",
+    response_model=PatientResponseSchema,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("patient", "update"))],
+    operation_id="add_patient_identifier",
+    summary="Add an identifier to a Patient",
+)
+async def add_identifier(
+    payload: IdentifierCreate,
+    request: Request,
+    patient: PatientModel = Depends(get_authorized_patient),
+    patient_service: PatientService = Depends(get_patient_service),
+):
+    updated = await patient_service.add_identifier(patient.patient_id, payload)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    return format_response(
+        patient_service._to_fhir(updated),
+        patient_service._to_plain(updated),
+        request,
+    )
+
+
+# ── Sub-resource: Telecom ──────────────────────────────────────────────────
+
+
+@router.post(
+    "/{patient_id}/telecom",
+    response_model=PatientResponseSchema,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("patient", "update"))],
+    operation_id="add_patient_telecom",
+    summary="Add a contact point (telecom) to a Patient",
+)
+async def add_telecom(
+    payload: TelecomCreate,
+    request: Request,
+    patient: PatientModel = Depends(get_authorized_patient),
+    patient_service: PatientService = Depends(get_patient_service),
+):
+    updated = await patient_service.add_telecom(patient.patient_id, payload)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    return format_response(
+        patient_service._to_fhir(updated),
+        patient_service._to_plain(updated),
+        request,
+    )
+
+
+# ── Sub-resource: Addresses ────────────────────────────────────────────────
+
+
+@router.post(
+    "/{patient_id}/addresses",
+    response_model=PatientResponseSchema,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("patient", "update"))],
+    operation_id="add_patient_address",
+    summary="Add an address to a Patient",
+)
+async def add_address(
+    payload: AddressCreate,
+    request: Request,
+    patient: PatientModel = Depends(get_authorized_patient),
+    patient_service: PatientService = Depends(get_patient_service),
+):
+    updated = await patient_service.add_address(patient.patient_id, payload)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    return format_response(
+        patient_service._to_fhir(updated),
+        patient_service._to_plain(updated),
+        request,
+    )

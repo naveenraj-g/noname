@@ -1,21 +1,76 @@
 from typing import Optional, List
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker  # noqa: F401
 from sqlalchemy.future import select
-from app.models.patient import PatientModel
-from fhir.resources.patient import Patient
-from pydantic import ValidationError
-from app.errors.infrastructure import InfrastructureError
-from app.schemas.resources import PatientCreateSchema, PatientResponseSchema
+from sqlalchemy.orm import selectinload
+
+from app.models.patient import PatientModel, PatientIdentifier, PatientTelecom, PatientAddress
+from app.schemas.resources import PatientCreateSchema, PatientPatchSchema, IdentifierCreate, TelecomCreate, AddressCreate
+
+
+def _with_relationships(stmt):
+    """Attach eager-load options for all patient sub-resources."""
+    return stmt.options(
+        selectinload(PatientModel.identifiers),
+        selectinload(PatientModel.telecoms),
+        selectinload(PatientModel.addresses),
+    )
 
 
 class PatientRepository:
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]):
         self.session_factory = session_factory
 
-    async def create(self, payload: PatientCreateSchema) -> PatientResponseSchema:
-        async with self.session_factory() as session:
-            patient = PatientModel(**payload.model_dump(exclude={"resourceType"}))
+    # ── Read ─────────────────────────────────────────────────────────────
 
+    async def get_by_patient_id(self, patient_id: int) -> Optional[PatientModel]:
+        """Fetch by public patient_id with all sub-resources loaded."""
+        async with self.session_factory() as session:
+            stmt = _with_relationships(
+                select(PatientModel).where(PatientModel.patient_id == patient_id)
+            )
+            result = await session.execute(stmt)
+            return result.scalars().first()
+
+    async def get_by_user_id(self, user_id: str) -> Optional[PatientModel]:
+        """Fetch by user_id with all sub-resources loaded."""
+        async with self.session_factory() as session:
+            stmt = _with_relationships(
+                select(PatientModel).where(PatientModel.user_id == user_id)
+            )
+            result = await session.execute(stmt)
+            return result.scalars().first()
+
+    async def list(self) -> List[PatientModel]:
+        async with self.session_factory() as session:
+            stmt = _with_relationships(select(PatientModel))
+            result = await session.execute(stmt)
+            return list(result.scalars().all())
+
+    # ── Write ────────────────────────────────────────────────────────────
+
+    async def get_me(self, user_id: str, org_id: str) -> Optional[PatientModel]:
+        """Fetch the patient profile that belongs to user_id within org_id."""
+        async with self.session_factory() as session:
+            stmt = _with_relationships(
+                select(PatientModel).where(
+                    PatientModel.user_id == user_id,
+                    PatientModel.org_id == org_id,
+                )
+            )
+            result = await session.execute(stmt)
+            return result.scalars().first()
+
+    async def create(self, payload: PatientCreateSchema, user_id: str, org_id: Optional[str] = None) -> PatientModel:
+        async with self.session_factory() as session:
+            patient = PatientModel(
+                user_id=user_id,
+                org_id=org_id,
+                given_name=payload.given_name,
+                family_name=payload.family_name,
+                gender=payload.gender,
+                birth_date=payload.birth_date,
+                active=payload.active,
+            )
             try:
                 session.add(patient)
                 await session.commit()
@@ -24,26 +79,23 @@ class PatientRepository:
                 await session.rollback()
                 raise
 
-            return PatientResponseSchema.model_validate(patient)
+            return await self.get_by_patient_id(patient.patient_id)
 
-    async def update(
-        self, patient_id: int, payload: PatientCreateSchema
-    ) -> Optional[PatientResponseSchema]:
+    async def patch(self, patient_id: int, payload: PatientPatchSchema) -> Optional[PatientModel]:
+        """Partial update — only fields explicitly set in payload are written."""
         async with self.session_factory() as session:
-            stmt = select(PatientModel).where(PatientModel.id == patient_id)
+            stmt = _with_relationships(
+                select(PatientModel).where(PatientModel.patient_id == patient_id)
+            )
             result = await session.execute(stmt)
             patient = result.scalars().first()
 
             if not patient:
                 return None
 
-            update_data = payload.model_dump(
-                exclude_unset=True,
-                exclude={"resourceType"},
-            )
-
-            for key, value in update_data.items():
-                setattr(patient, key, value)
+            update_data = payload.model_dump(exclude_unset=True)
+            for field, value in update_data.items():
+                setattr(patient, field, value)
 
             try:
                 await session.commit()
@@ -52,37 +104,12 @@ class PatientRepository:
                 await session.rollback()
                 raise
 
-            return PatientResponseSchema.model_validate(patient)
-
-    async def get_by_id(self, patient_id: int) -> Optional[PatientResponseSchema]:
-        async with self.session_factory() as session:
-            stmt = select(PatientModel).where(PatientModel.id == patient_id)
-            result = await session.execute(stmt)
-            patient = result.scalars().first()
-
-            if not patient:
-                return None
-
-            return PatientResponseSchema.model_validate(patient)
-
-    async def get_raw(self, patient_id: int) -> Optional[PatientModel]:
-        async with self.session_factory() as session:
-            stmt = select(PatientModel).where(PatientModel.id == patient_id)
-            result = await session.execute(stmt)
-            return result.scalars().first()
-
-    async def list(self) -> List[PatientResponseSchema]:
-        async with self.session_factory() as session:
-            stmt = select(PatientModel)
-            result = await session.execute(stmt)
-            patients = result.scalars().all()
-            return [
-                PatientResponseSchema.model_validate(patient) for patient in patients
-            ]
+        # Re-fetch with relationships in a fresh session
+        return await self.get_by_patient_id(patient_id)
 
     async def delete(self, patient_id: int) -> bool:
         async with self.session_factory() as session:
-            stmt = select(PatientModel).where(PatientModel.id == patient_id)
+            stmt = select(PatientModel).where(PatientModel.patient_id == patient_id)
             result = await session.execute(stmt)
             patient = result.scalars().first()
 
@@ -97,47 +124,77 @@ class PatientRepository:
                 await session.rollback()
                 raise
 
-    def _map_to_fhir(self, patient: PatientModel) -> dict:
-        """
-        Convert internal DB model to FHIR Patient resource format
-        """
+    # ── Sub-resource mutations ────────────────────────────────────────────
 
-        name = None
-        if patient.first_name or patient.last_name:
-            name = [
-                {
-                    "use": "official",
-                    "family": patient.last_name,
-                    "given": [
-                        x for x in [patient.first_name, patient.middle_name] if x
-                    ],
-                }
-            ]
+    async def add_identifier(self, patient_id: int, payload: IdentifierCreate) -> Optional[PatientModel]:
+        async with self.session_factory() as session:
+            stmt = select(PatientModel).where(PatientModel.patient_id == patient_id)
+            result = await session.execute(stmt)
+            patient = result.scalars().first()
 
-        patient_data = {
-            "resourceType": "Patient",
-            "id": str(patient.id),
-            "identifier": [
-                {
-                    "system": "http://hospital.local/patient-id",
-                    "value": str(patient.patient_id),
-                }
-            ],
-            "active": patient.active,
-            "name": name,
-            "gender": patient.gender,
-            "birthDate": patient.birth_date.isoformat() if patient.birth_date else None,
-            "deceasedBoolean": patient.deceased_boolean,
-            "deceasedDateTime": patient.deceased_dateTime.isoformat()
-            if patient.deceased_dateTime
-            else None,
-            "maritalStatus": patient.marital_status,
-        }
+            if not patient:
+                return None
 
-        try:
-            return Patient.model_validate(patient_data)
-        except ValidationError as e:
-            raise InfrastructureError(
-                message="Failed to map database entity to FHIR Patient",
-                cause=e,
+            ident = PatientIdentifier(
+                patient_id=patient.id,
+                system=payload.system,
+                value=payload.value,
             )
+            try:
+                session.add(ident)
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+
+            return await self.get_by_patient_id(patient_id)
+
+    async def add_telecom(self, patient_id: int, payload: TelecomCreate) -> Optional[PatientModel]:
+        async with self.session_factory() as session:
+            stmt = select(PatientModel).where(PatientModel.patient_id == patient_id)
+            result = await session.execute(stmt)
+            patient = result.scalars().first()
+
+            if not patient:
+                return None
+
+            telecom = PatientTelecom(
+                patient_id=patient.id,
+                system=payload.system,
+                value=payload.value,
+                use=payload.use,
+            )
+            try:
+                session.add(telecom)
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+
+            return await self.get_by_patient_id(patient_id)
+
+    async def add_address(self, patient_id: int, payload: AddressCreate) -> Optional[PatientModel]:
+        async with self.session_factory() as session:
+            stmt = select(PatientModel).where(PatientModel.patient_id == patient_id)
+            result = await session.execute(stmt)
+            patient = result.scalars().first()
+
+            if not patient:
+                return None
+
+            address = PatientAddress(
+                patient_id=patient.id,
+                line=payload.line,
+                city=payload.city,
+                state=payload.state,
+                postal_code=payload.postal_code,
+                country=payload.country,
+            )
+            try:
+                session.add(address)
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+
+            return await self.get_by_patient_id(patient_id)

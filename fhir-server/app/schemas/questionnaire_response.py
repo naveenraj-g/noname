@@ -1,185 +1,253 @@
-from pydantic import BaseModel, Field
-from typing import List, Optional, Literal, Union
-from datetime import datetime, date
+from datetime import datetime
+from typing import List, Optional
+from typing_extensions import Literal
+from pydantic import BaseModel, ConfigDict, Field
 
 
-# ── FHIR Data Types ─────────────────────────────────────────────────────────
+# ── Status value set (FHIR R4) ─────────────────────────────────────────────
+
+QuestionnaireResponseStatus = Literal[
+    "in-progress",
+    "completed",
+    "amended",
+    "entered-in-error",
+    "stopped",
+]
 
 
-class Coding(BaseModel):
-    system: Optional[str] = Field(None, example="http://snomed.info/sct")
-    code: Optional[str] = Field(None, example="394814009")
-    display: Optional[str] = Field(None, example="General practice")
+# ── Answer value sub-types ─────────────────────────────────────────────────
 
 
-class Reference(BaseModel):
-    reference: Optional[str] = Field(None, example="Patient/123")
-    display: Optional[str] = Field(None, example="John Doe")
+class AnswerCodingInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    system: Optional[str] = None
+    code: Optional[str] = None
+    display: Optional[str] = None
 
 
-class Quantity(BaseModel):
+class AnswerQuantityInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     value: Optional[float] = None
     unit: Optional[str] = None
     system: Optional[str] = None
     code: Optional[str] = None
 
 
-# ── Answer Value Types ───────────────────────────────────────────────────────
+# ── Answer input ───────────────────────────────────────────────────────────
 
 
-class AnswerSchema(BaseModel):
+class AnswerInput(BaseModel):
     """
     A single answer value within a QuestionnaireResponse item.
-    Exactly one value[x] field should be set.
+    Set exactly one value_ field.
     """
 
-    valueBoolean: Optional[bool] = Field(None, description="Boolean answer value")
-    valueDecimal: Optional[float] = Field(None, description="Decimal answer value")
-    valueInteger: Optional[int] = Field(None, description="Integer answer value")
-    valueDate: Optional[str] = Field(None, description="Date answer value (YYYY-MM-DD)", example="2024-06-01")
-    valueDateTime: Optional[datetime] = Field(None, description="DateTime answer value")
-    valueTime: Optional[str] = Field(None, description="Time answer value (HH:MM:SS)", example="09:00:00")
-    valueString: Optional[str] = Field(None, description="String answer value")
-    valueUri: Optional[str] = Field(None, description="URI answer value")
-    valueCoding: Optional[Coding] = Field(None, description="Coded answer value")
-    valueQuantity: Optional[Quantity] = Field(None, description="Quantity answer value")
-    valueReference: Optional[Reference] = Field(None, description="Reference answer value")
+    model_config = ConfigDict(extra="forbid")
 
-    # nested items within an answer (for conditional groups)
-    item: Optional[List["ItemSchema"]] = Field(None, description="Nested items within this answer")
+    value_boolean: Optional[bool] = None
+    value_decimal: Optional[float] = None
+    value_integer: Optional[int] = None
+    value_date: Optional[str] = Field(None, description="Date answer (YYYY-MM-DD).", examples=["2024-06-01"])
+    value_datetime: Optional[datetime] = None
+    value_time: Optional[str] = Field(None, description="Time answer (HH:MM:SS).", examples=["09:00:00"])
+    value_string: Optional[str] = None
+    value_uri: Optional[str] = None
+    value_coding: Optional[AnswerCodingInput] = None
+    value_quantity: Optional[AnswerQuantityInput] = None
+    value_reference: Optional[str] = Field(
+        None,
+        description="Reference answer using the public resource ID, e.g. 'Patient/10001'.",
+    )
+    # Nested items within an answer (for conditional groups)
+    item: Optional[List["ItemInput"]] = None
 
 
-# ── Item (recursive backbone element) ────────────────────────────────────────
+# ── Item input (recursive) ─────────────────────────────────────────────────
 
 
-class ItemSchema(BaseModel):
+class ItemInput(BaseModel):
     """
     A group or question item within the QuestionnaireResponse.
     Items can be nested to represent grouped questions.
     """
 
-    linkId: str = Field(
-        ...,
-        description="Pointer to specific item from Questionnaire. Required.",
-        example="1.1",
-    )
-    definition: Optional[str] = Field(
-        None,
-        description="ElementDefinition — details for the item.",
-    )
-    text: Optional[str] = Field(
-        None,
-        description="Name for group or question text.",
-        example="What is your date of birth?",
-    )
-    answer: Optional[List[AnswerSchema]] = Field(
-        None,
-        description="The response(s) to the question.",
-    )
-    item: Optional[List["ItemSchema"]] = Field(
-        None,
-        description="Nested items for groups or conditional follow-up questions.",
-    )
+    model_config = ConfigDict(extra="forbid")
+
+    link_id: str = Field(..., description="Pointer to the specific item from the Questionnaire.", examples=["1.1"])
+    definition: Optional[str] = None
+    text: Optional[str] = Field(None, description="Question text or group name.", examples=["What is your date of birth?"])
+    answer: Optional[List[AnswerInput]] = None
+    item: Optional[List["ItemInput"]] = None  # nested group items
 
 
-AnswerSchema.model_rebuild()
-ItemSchema.model_rebuild()
+AnswerInput.model_rebuild()
+ItemInput.model_rebuild()
 
 
-# ── Main Schema ───────────────────────────────────────────────────────────────
+# ── Create / patch ─────────────────────────────────────────────────────────
 
 
 class QuestionnaireResponseCreateSchema(BaseModel):
     """
-    Schema for creating a FHIR QuestionnaireResponse resource.
+    Payload for creating a QuestionnaireResponse.
 
-    A QuestionnaireResponse is a completed or in-progress set of answers
-    to questions from a Questionnaire. It follows the HL7 FHIR R5
-    QuestionnaireResponse specification.
-
-    Required fields: `questionnaire` and `status`.
+    A QuestionnaireResponse is a completed or in-progress set of answers to
+    questions from a Questionnaire. References use public IDs
+    (e.g. Patient/10001, Encounter/20001, Practitioner/30001).
     """
 
-    resourceType: str = Field(
-        "QuestionnaireResponse",
-        pattern="^QuestionnaireResponse$",
-        example="QuestionnaireResponse",
-    )
-    questionnaire: str = Field(
-        ...,
-        description="The Questionnaire that defines and organizes these questions (canonical URL or id).",
-        example="http://example.org/fhir/Questionnaire/phq-9",
-    )
-    status: Literal["in-progress", "completed", "amended", "entered-in-error", "stopped"] = Field(
-        ...,
-        description=(
-            "The lifecycle status of the response. "
-            "'in-progress' = being filled out; 'completed' = fully completed; "
-            "'amended' = corrected after completion; 'entered-in-error' = recorded in error; "
-            "'stopped' = collection was stopped before completion."
-        ),
-        example="completed",
-    )
-    subject: Optional[Reference] = Field(
-        None,
-        description="The subject of the questionnaire response — typically a Patient.",
-        example={"reference": "Patient/123", "display": "Jane Doe"},
-    )
-    encounter: Optional[Reference] = Field(
-        None,
-        description="The Encounter during which this response was created.",
-        example={"reference": "Encounter/456"},
-    )
-    authored: Optional[datetime] = Field(
-        None,
-        description="The date/time the answers were gathered.",
-        example="2024-06-01T09:00:00Z",
-    )
-    author: Optional[Reference] = Field(
-        None,
-        description="Who recorded the answers (Practitioner, Patient, etc.).",
-        example={"reference": "Practitioner/789", "display": "Dr. Smith"},
-    )
-    source: Optional[Reference] = Field(
-        None,
-        description="Who answered the questions (if different from author).",
-        example={"reference": "Patient/123"},
-    )
-    item: Optional[List[ItemSchema]] = Field(
-        None,
-        description="The groups and questions that make up the response.",
-    )
-
-    class Config:
-        populate_by_name = True
-        json_schema_extra = {
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={
             "example": {
-                "resourceType": "QuestionnaireResponse",
                 "questionnaire": "http://example.org/fhir/Questionnaire/phq-9",
                 "status": "completed",
-                "subject": {"reference": "Patient/123", "display": "Jane Doe"},
-                "encounter": {"reference": "Encounter/456"},
+                "subject": "Patient/10001",
+                "encounter": "Encounter/20001",
                 "authored": "2024-06-01T09:00:00Z",
-                "author": {"reference": "Practitioner/789", "display": "Dr. Smith"},
+                "author": "Practitioner/30001",
+                "source": "Patient/10001",
                 "item": [
                     {
-                        "linkId": "1",
+                        "link_id": "1",
                         "text": "Over the last 2 weeks, how often have you felt down, depressed, or hopeless?",
                         "answer": [
-                            {"valueCoding": {"system": "http://loinc.org", "code": "LA6568-5", "display": "Not at all"}}
+                            {
+                                "value_coding": {
+                                    "system": "http://loinc.org",
+                                    "code": "LA6568-5",
+                                    "display": "Not at all",
+                                }
+                            }
                         ],
                     },
                     {
-                        "linkId": "2",
+                        "link_id": "2",
                         "text": "Mental health group",
                         "item": [
                             {
-                                "linkId": "2.1",
+                                "link_id": "2.1",
                                 "text": "Do you have difficulty concentrating?",
-                                "answer": [{"valueBoolean": False}],
+                                "answer": [{"value_boolean": False}],
                             }
                         ],
                     },
                 ],
             }
-        }
+        },
+    )
+
+    questionnaire: str = Field(
+        ...,
+        description="Canonical URL or id of the Questionnaire this response answers.",
+        examples=["http://example.org/fhir/Questionnaire/phq-9"],
+    )
+    status: QuestionnaireResponseStatus
+    subject: Optional[str] = Field(
+        None,
+        description="Subject reference using the public patient_id, e.g. 'Patient/10001'.",
+    )
+    subject_display: Optional[str] = None
+    encounter: Optional[str] = Field(
+        None,
+        description="Encounter reference, e.g. 'Encounter/20001'.",
+    )
+    authored: Optional[datetime] = Field(None, description="Date/time the answers were gathered.")
+    author: Optional[str] = Field(
+        None,
+        description="Who recorded the answers, e.g. 'Practitioner/30001' or 'Patient/10001'.",
+    )
+    author_display: Optional[str] = None
+    source: Optional[str] = Field(
+        None,
+        description="Who answered the questions (if different from author), e.g. 'Patient/10001'.",
+    )
+    source_display: Optional[str] = None
+    item: Optional[List[ItemInput]] = None
+
+
+class QuestionnaireResponsePatchSchema(BaseModel):
+    """
+    Partial update for a QuestionnaireResponse.
+
+    Only lifecycle fields are patchable after creation. To replace items,
+    re-create the resource.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: Optional[QuestionnaireResponseStatus] = None
+    authored: Optional[datetime] = None
+
+
+# ── FHIR response fragments (read-only) ───────────────────────────────────
+
+
+class FHIRCoding(BaseModel):
+    system: Optional[str] = None
+    code: Optional[str] = None
+    display: Optional[str] = None
+
+
+class FHIRQuantity(BaseModel):
+    value: Optional[float] = None
+    unit: Optional[str] = None
+    system: Optional[str] = None
+    code: Optional[str] = None
+
+
+class FHIRReference(BaseModel):
+    reference: Optional[str] = None
+    display: Optional[str] = None
+
+
+class FHIRAnswerSchema(BaseModel):
+    valueBoolean: Optional[bool] = None
+    valueDecimal: Optional[float] = None
+    valueInteger: Optional[int] = None
+    valueDate: Optional[str] = None
+    valueDateTime: Optional[datetime] = None
+    valueTime: Optional[str] = None
+    valueString: Optional[str] = None
+    valueUri: Optional[str] = None
+    valueCoding: Optional[FHIRCoding] = None
+    valueQuantity: Optional[FHIRQuantity] = None
+    valueReference: Optional[FHIRReference] = None
+    item: Optional[List["FHIRItemSchema"]] = None
+
+
+class FHIRItemSchema(BaseModel):
+    linkId: str
+    definition: Optional[str] = None
+    text: Optional[str] = None
+    answer: Optional[List[FHIRAnswerSchema]] = None
+    item: Optional[List["FHIRItemSchema"]] = None
+
+
+FHIRAnswerSchema.model_rebuild()
+FHIRItemSchema.model_rebuild()
+
+
+# ── Response schema ────────────────────────────────────────────────────────
+
+
+class QuestionnaireResponseResponseSchema(BaseModel):
+    """
+    FHIR R4 QuestionnaireResponse resource returned by all read/write endpoints.
+
+    - `id` is the PUBLIC questionnaire_response_id (e.g. '60001') — never the internal PK.
+    - References use public IDs (Patient/10001, Encounter/20001, Practitioner/30001).
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    resourceType: Literal["QuestionnaireResponse"] = "QuestionnaireResponse"
+    id: str = Field(..., description="Public questionnaire response identifier (e.g. '60001').")
+    questionnaire: str
+    status: str
+    subject: Optional[FHIRReference] = None
+    encounter: Optional[FHIRReference] = None
+    authored: Optional[datetime] = None
+    author: Optional[FHIRReference] = None
+    source: Optional[FHIRReference] = None
+    item: Optional[List[FHIRItemSchema]] = None
