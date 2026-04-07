@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from typing import List, Optional
 from typing_extensions import Literal
 from pydantic import BaseModel, ConfigDict, Field
@@ -9,7 +9,7 @@ from app.schemas.enums import (
     AddressUse,
     AddressType,
     IdentifierUse,
-    HumanNameUse,
+    PractitionerRole,
 )
 
 
@@ -27,9 +27,6 @@ class FHIRHumanName(BaseModel):
     use: Optional[str] = None
     family: Optional[str] = None
     given: List[str] = []
-    text: Optional[str] = None
-    prefix: List[str] = []
-    suffix: List[str] = []
 
 
 class FHIRPractitionerTelecom(BaseModel):
@@ -81,15 +78,6 @@ class PractitionerIdentifierCreate(BaseModel):
     use: Optional[IdentifierUse] = Field(None, description="Purpose of this identifier.")
 
 
-class PractitionerNameCreate(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    use: Optional[HumanNameUse] = Field(None, description="Purpose of this name.")
-    family: Optional[str] = Field(None, max_length=100, description="Family name (surname).")
-    given: Optional[List[str]] = Field(None, description="Given names — first name, then middle names.")
-    text: Optional[str] = Field(None, description="Full name as a single string, e.g. 'Dr. Jane M. Smith MD'.")
-    prefix: Optional[List[str]] = Field(None, description="Honorific prefixes, e.g. ['Dr.', 'Prof.'].")
-    suffix: Optional[List[str]] = Field(None, description="Professional suffixes, e.g. ['MD', 'PhD'].")
-
 
 class PractitionerTelecomCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -134,6 +122,8 @@ class PractitionerCreateSchema(BaseModel):
         extra="forbid",
         json_schema_extra={
             "example": {
+                "given_name": "Jane",
+                "family_name": "Smith",
                 "active": True,
                 "gender": "female",
                 "birth_date": "1978-03-15",
@@ -141,9 +131,15 @@ class PractitionerCreateSchema(BaseModel):
         },
     )
 
+    given_name: Optional[str] = Field(None, max_length=100)
+    family_name: Optional[str] = Field(None, max_length=100)
     active: Optional[bool] = True
     gender: Optional[AdministrativeGender] = None
     birth_date: Optional[date] = None
+    role: Optional[PractitionerRole] = None
+    specialty: Optional[str] = Field(None, max_length=200)
+    deceased_boolean: Optional[bool] = False
+    deceased_datetime: Optional[datetime] = None
 
 
 class PractitionerPatchSchema(BaseModel):
@@ -151,9 +147,15 @@ class PractitionerPatchSchema(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    given_name: Optional[str] = Field(None, max_length=100)
+    family_name: Optional[str] = Field(None, max_length=100)
     active: Optional[bool] = None
     gender: Optional[AdministrativeGender] = None
     birth_date: Optional[date] = None
+    role: Optional[PractitionerRole] = None
+    specialty: Optional[str] = Field(None, max_length=200)
+    deceased_boolean: Optional[bool] = None
+    deceased_datetime: Optional[datetime] = None
 
 
 # ── Practitioner response ──────────────────────────────────────────────────
@@ -174,6 +176,10 @@ class PractitionerResponseSchema(BaseModel):
     active: Optional[bool] = None
     gender: Optional[str] = None
     birthDate: Optional[date] = None
+    role: Optional[str] = None
+    specialty: Optional[str] = None
+    deceasedBoolean: Optional[bool] = None
+    deceasedDateTime: Optional[datetime] = None
     identifier: Optional[List[FHIRPractitionerIdentifier]] = None
     name: Optional[List[FHIRHumanName]] = None
     telecom: Optional[List[FHIRPractitionerTelecom]] = None

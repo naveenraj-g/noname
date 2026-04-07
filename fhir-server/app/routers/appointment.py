@@ -6,7 +6,7 @@ from app.auth.dependencies import require_permission
 from app.auth.appointment_deps import get_authorized_appointment
 from app.core.content_negotiation import format_response, format_list_response
 from app.di.dependencies.appointment import get_appointment_service
-from app.models.appointment import AppointmentModel
+from app.models.appointment.appointment import AppointmentModel
 from app.schemas.appointment import (
     AppointmentCreateSchema,
     AppointmentPatchSchema,
@@ -112,7 +112,9 @@ async def patch_appointment(
     appointment: AppointmentModel = Depends(get_authorized_appointment),
     appointment_service: AppointmentService = Depends(get_appointment_service),
 ):
-    updated = await appointment_service.patch_appointment(appointment.appointment_id, payload)
+    updated = await appointment_service.patch_appointment(
+        appointment.appointment_id, payload
+    )
     if not updated:
         raise HTTPException(status_code=404, detail="Appointment not found")
     return format_response(
@@ -132,14 +134,17 @@ async def patch_appointment(
     dependencies=[Depends(require_permission("appointment", "read"))],
     operation_id="list_appointments",
     summary="List all Appointment resources",
-    description="Returns all appointments. Filter by patient using `?patient_id={patient_id}` (public patient_id).",
+    description="Returns all appointments. Filter by `?patient_id=` or `?encounter_id=` (public IDs).",
 )
 async def list_appointments(
     request: Request,
     patient_id: Optional[int] = None,
+    encounter_id: Optional[int] = None,
     appointment_service: AppointmentService = Depends(get_appointment_service),
 ):
-    appointments = await appointment_service.list_appointments(patient_id=patient_id)
+    appointments = await appointment_service.list_appointments(
+        patient_id=patient_id, encounter_id=encounter_id
+    )
     return format_list_response(
         [appointment_service._to_fhir(a) for a in appointments],
         [appointment_service._to_plain(a) for a in appointments],

@@ -1,7 +1,18 @@
-from sqlalchemy import Column, String, Date, Boolean, ForeignKey, Integer, DateTime, Sequence
+from sqlalchemy import (
+    Column,
+    String,
+    Date,
+    Boolean,
+    ForeignKey,
+    Integer,
+    DateTime,
+    Enum,
+    Sequence,
+)
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import FHIRBase as Base
+from app.models.enums import PractitionerRole
 
 practitioner_id_seq = Sequence("practitioner_id_seq", start=30000, increment=1)
 
@@ -25,8 +36,14 @@ class PractitionerModel(Base):
     user_id = Column(String, nullable=True, index=True)
     org_id = Column(String, nullable=True)
     active = Column(Boolean, nullable=True)
+    given_name = Column(String, nullable=True)
+    family_name = Column(String, nullable=True)
     gender = Column(String, nullable=True)
     birth_date = Column(Date, nullable=True)
+    role = Column(Enum(PractitionerRole, name="practitioner_role"), nullable=True)
+    specialty = Column(String, nullable=True)
+    deceased_boolean = Column(Boolean, nullable=True, default=False)
+    deceased_datetime = Column(DateTime(timezone=True), nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -36,9 +53,6 @@ class PractitionerModel(Base):
         "PractitionerIdentifier",
         back_populates="practitioner",
         cascade="all, delete-orphan",
-    )
-    names = relationship(
-        "PractitionerName", back_populates="practitioner", cascade="all, delete-orphan"
     )
     telecoms = relationship(
         "PractitionerTelecom",
@@ -57,8 +71,6 @@ class PractitionerModel(Base):
     )
 
 
-
-
 class PractitionerIdentifier(Base):
     __tablename__ = "practitioner_identifier"
 
@@ -73,25 +85,6 @@ class PractitionerIdentifier(Base):
     use = Column(String, nullable=True)
 
     practitioner = relationship("PractitionerModel", back_populates="identifiers")
-
-
-class PractitionerName(Base):
-    __tablename__ = "practitioner_name"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    practitioner_id = Column(
-        Integer, ForeignKey("practitioner.id"), nullable=False, index=True
-    )
-    org_id = Column(String, nullable=True)
-
-    use = Column(String, nullable=True)
-    family = Column(String, nullable=True)
-    given = Column(String, nullable=True)  # Comma-separated
-    text = Column(String, nullable=True)
-    prefix = Column(String, nullable=True)  # Dr., Mr., Mrs., etc (comma-separated)
-    suffix = Column(String, nullable=True)  # Jr., Sr., PhD, etc (comma-separated)
-
-    practitioner = relationship("PractitionerModel", back_populates="names")
 
 
 class PractitionerTelecom(Base):

@@ -4,11 +4,17 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker  # noqa: F40
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 
-from app.models.questionnaire_response import (
+from app.models.questionnaire_response.questionnaire_response import (
     QuestionnaireResponseModel,
     QuestionnaireResponseItemModel,
     QuestionnaireResponseAnswerModel,
 )
+from app.models.questionnaire_response.enums import (
+    QuestionnaireResponseAuthorReferenceType,
+    QuestionnaireResponseSourceReferenceType,
+)
+from app.models.encounter.encounter import EncounterModel
+from app.models.enums import SubjectReferenceType
 from app.schemas.questionnaire_response import (
     QuestionnaireResponseCreateSchema,
     QuestionnaireResponsePatchSchema,
@@ -18,15 +24,68 @@ from app.schemas.questionnaire_response import (
 
 
 def _with_relationships(stmt):
-    """Attach eager-load options for items (2 levels deep) with answers."""
+    """Attach eager-load options for encounter + items (2 levels deep) with answers."""
     return stmt.options(
+        selectinload(QuestionnaireResponseModel.encounter),
         selectinload(QuestionnaireResponseModel.items).selectinload(
             QuestionnaireResponseItemModel.answers
         ),
-        selectinload(QuestionnaireResponseModel.items).selectinload(
-            QuestionnaireResponseItemModel.sub_items
-        ).selectinload(QuestionnaireResponseItemModel.answers),
+        selectinload(QuestionnaireResponseModel.items)
+        .selectinload(QuestionnaireResponseItemModel.sub_items)
+        .selectinload(QuestionnaireResponseItemModel.answers),
     )
+
+
+def _parse_subject(subject_str: Optional[str]):
+    """Parse 'Patient/10001' → (SubjectReferenceType.PATIENT, 10001)."""
+    if not subject_str:
+        return None, None
+    parts = subject_str.split("/")
+    if len(parts) != 2:
+        return None, None
+    try:
+        return SubjectReferenceType(parts[0]), int(parts[1])
+    except (ValueError, KeyError):
+        return None, None
+
+
+def _parse_author(author_str: Optional[str]):
+    """Parse 'Practitioner/30001' → (QuestionnaireResponseAuthorReferenceType, 30001)."""
+    if not author_str:
+        return None, None
+    parts = author_str.split("/")
+    if len(parts) != 2:
+        return None, None
+    try:
+        return QuestionnaireResponseAuthorReferenceType(parts[0]), int(parts[1])
+    except (ValueError, KeyError):
+        return None, None
+
+
+def _parse_source(source_str: Optional[str]):
+    """Parse 'Patient/10001' → (QuestionnaireResponseSourceReferenceType, 10001)."""
+    if not source_str:
+        return None, None
+    parts = source_str.split("/")
+    if len(parts) != 2:
+        return None, None
+    try:
+        return QuestionnaireResponseSourceReferenceType(parts[0]), int(parts[1])
+    except (ValueError, KeyError):
+        return None, None
+
+
+def _parse_encounter_ref(encounter_str: Optional[str]) -> Optional[int]:
+    """Parse 'Encounter/20001' → public encounter_id 20001."""
+    if not encounter_str:
+        return None
+    parts = encounter_str.split("/")
+    if len(parts) != 2 or parts[0] != "Encounter":
+        return None
+    try:
+        return int(parts[1])
+    except ValueError:
+        return None
 
 
 def _build_answer(answer: AnswerInput) -> QuestionnaireResponseAnswerModel:
@@ -74,8 +133,9 @@ def _build_answer(answer: AnswerInput) -> QuestionnaireResponseAnswerModel:
     return db
 
 
-def _build_item(item: ItemInput) -> QuestionnaireResponseItemModel:
+def _build_item(item: ItemInput, response_id: int) -> QuestionnaireResponseItemModel:
     db_item = QuestionnaireResponseItemModel(
+        response_id=response_id,
         link_id=item.link_id,
         text=item.text,
         definition=item.definition,
@@ -85,7 +145,7 @@ def _build_item(item: ItemInput) -> QuestionnaireResponseItemModel:
             db_item.answers.append(_build_answer(a))
     if item.item:
         for sub in item.item:
-            db_item.sub_items.append(_build_item(sub))
+            db_item.sub_items.append(_build_item(sub, response_id))
     return db_item
 
 
@@ -109,7 +169,9 @@ class QuestionnaireResponseRepository:
             result = await session.execute(stmt)
             return result.scalars().first()
 
-    async def get_me(self, user_id: str, org_id: str) -> List[QuestionnaireResponseModel]:
+    async def get_me(
+        self, user_id: str, org_id: str
+    ) -> List[QuestionnaireResponseModel]:
         """Fetch all QuestionnaireResponses owned by user_id within org_id."""
         async with self.session_factory() as session:
             stmt = _with_relationships(
@@ -122,15 +184,34 @@ class QuestionnaireResponseRepository:
             return list(result.scalars().all())
 
     async def list(
-        self, patient_id: Optional[int] = None
+        self,
+        patient_id: Optional[int] = None,
+        encounter_id: Optional[int] = None,
     ) -> List[QuestionnaireResponseModel]:
-        """List responses, optionally filtered by public patient_id."""
+        """List responses, optionally filtered by public patient_id or encounter_id."""
         async with self.session_factory() as session:
             stmt = _with_relationships(select(QuestionnaireResponseModel))
+
             if patient_id is not None:
                 stmt = stmt.where(
-                    QuestionnaireResponseModel.subject_reference == f"Patient/{patient_id}"
+                    QuestionnaireResponseModel.subject_type == SubjectReferenceType.PATIENT,
+                    QuestionnaireResponseModel.subject_id == patient_id,
                 )
+
+            if encounter_id is not None:
+                enc_result = await session.execute(
+                    select(EncounterModel.id).where(
+                        EncounterModel.encounter_id == encounter_id
+                    )
+                )
+                internal_enc_id = enc_result.scalar_one_or_none()
+                if internal_enc_id is not None:
+                    stmt = stmt.where(
+                        QuestionnaireResponseModel.encounter_id == internal_enc_id
+                    )
+                else:
+                    return []
+
             result = await session.execute(stmt)
             return list(result.scalars().all())
 
@@ -142,28 +223,48 @@ class QuestionnaireResponseRepository:
         user_id: str,
         org_id: Optional[str] = None,
     ) -> QuestionnaireResponseModel:
+        subject_type, subject_id = _parse_subject(payload.subject)
+        author_type, author_id = _parse_author(payload.author)
+        source_type, source_id = _parse_source(payload.source)
+        public_encounter_id = _parse_encounter_ref(payload.encounter)
+
         async with self.session_factory() as session:
+            # Resolve public encounter_id → internal encounter PK
+            internal_encounter_id: Optional[int] = None
+            if public_encounter_id is not None:
+                enc_result = await session.execute(
+                    select(EncounterModel.id).where(
+                        EncounterModel.encounter_id == public_encounter_id
+                    )
+                )
+                internal_encounter_id = enc_result.scalar_one_or_none()
+
             qr = QuestionnaireResponseModel(
                 user_id=user_id,
                 org_id=org_id,
                 questionnaire=payload.questionnaire,
                 status=payload.status,
-                subject_reference=payload.subject,
+                subject_type=subject_type,
+                subject_id=subject_id,
                 subject_display=payload.subject_display,
-                encounter_reference=payload.encounter,
+                encounter_id=internal_encounter_id,
                 authored=payload.authored,
-                author_reference=payload.author,
-                author_display=payload.author_display,
-                source_reference=payload.source,
-                source_display=payload.source_display,
+                author_reference_type=author_type,
+                author_reference_id=author_id,
+                author_reference_display=payload.author_display,
+                source_reference_type=source_type,
+                source_reference_id=source_id,
+                source_reference_display=payload.source_display,
             )
-
-            if payload.item:
-                for item in payload.item:
-                    qr.items.append(_build_item(item))
 
             try:
                 session.add(qr)
+                await session.flush()  # inserts qr row alone → qr.id is now set
+
+                if payload.item:
+                    for item in payload.item:
+                        session.add(_build_item(item, qr.id))
+
                 await session.commit()
                 await session.refresh(qr)
             except Exception:

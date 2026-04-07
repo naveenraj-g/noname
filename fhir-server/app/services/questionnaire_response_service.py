@@ -1,7 +1,11 @@
 from typing import Optional, List
 
-from app.models.questionnaire_response import QuestionnaireResponseModel
-from app.repository.questionnaire_response_repository import QuestionnaireResponseRepository
+from app.models.questionnaire_response.questionnaire_response import (
+    QuestionnaireResponseModel,
+)
+from app.repository.questionnaire_response_repository import (
+    QuestionnaireResponseRepository,
+)
 from app.schemas.questionnaire_response import (
     QuestionnaireResponseCreateSchema,
     QuestionnaireResponsePatchSchema,
@@ -37,13 +41,17 @@ class QuestionnaireResponseService:
     ) -> Optional[QuestionnaireResponseModel]:
         return await self.repository.get_by_qr_id(questionnaire_response_id)
 
-    async def get_me(self, user_id: str, org_id: str) -> List[QuestionnaireResponseModel]:
+    async def get_me(
+        self, user_id: str, org_id: str
+    ) -> List[QuestionnaireResponseModel]:
         return await self.repository.get_me(user_id, org_id)
 
     async def list_questionnaire_responses(
-        self, patient_id: Optional[int] = None
+        self,
+        patient_id: Optional[int] = None,
+        encounter_id: Optional[int] = None,
     ) -> List[QuestionnaireResponseModel]:
-        return await self.repository.list(patient_id=patient_id)
+        return await self.repository.list(patient_id=patient_id, encounter_id=encounter_id)
 
     # ── Write ─────────────────────────────────────────────────────────────
 

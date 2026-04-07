@@ -121,3 +121,8 @@ class PatientLinkType(str, Enum):
     replaces = "replaces"
     refer = "refer"
     seealso = "seealso"
+
+
+class PractitionerRole(str, Enum):
+    doctor = "doctor"
+    nurse = "nurse"

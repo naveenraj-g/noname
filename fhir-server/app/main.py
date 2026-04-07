@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 from typing import Any, cast
-
+from sqlalchemy import text
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError, ResponseValidationError
 from fastapi.responses import Response
@@ -41,6 +41,15 @@ async def lifespan(app: FastAPI):
     if settings.ENVIRONMENT == "development":
         logger.info("Creating database tables (development mode)...")
         await db.connect()
+        # async with db.engine.connect() as conn:
+        #     await conn.execute(
+        #         text("""
+        #         ALTER TABLE appointment
+        #         ADD COLUMN IF NOT EXISTS recurrence_id INTEGER,
+        #         ADD COLUMN IF NOT EXISTS occurrence_changed BOOLEAN;
+        #     """)
+        #     )
+        #     await conn.commit()
         logger.info("Database tables ensured.")
 
     try:

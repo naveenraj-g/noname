@@ -6,7 +6,6 @@ from sqlalchemy.orm import selectinload
 from app.models.practitioner import (
     PractitionerModel,
     PractitionerIdentifier,
-    PractitionerName,
     PractitionerTelecom,
     PractitionerAddress,
     PractitionerQualification,
@@ -15,7 +14,6 @@ from app.schemas.practitioner import (
     PractitionerCreateSchema,
     PractitionerPatchSchema,
     PractitionerIdentifierCreate,
-    PractitionerNameCreate,
     PractitionerTelecomCreate,
     PractitionerAddressCreate,
     PractitionerQualificationCreate,
@@ -26,7 +24,6 @@ def _with_relationships(stmt):
     """Attach eager-load options for all practitioner sub-resources."""
     return stmt.options(
         selectinload(PractitionerModel.identifiers),
-        selectinload(PractitionerModel.names),
         selectinload(PractitionerModel.telecoms),
         selectinload(PractitionerModel.addresses),
         selectinload(PractitionerModel.qualifications),
@@ -82,6 +79,8 @@ class PractitionerRepository:
             practitioner = PractitionerModel(
                 user_id=user_id,
                 org_id=org_id,
+                given_name=payload.given_name,
+                family_name=payload.family_name,
                 active=payload.active,
                 gender=payload.gender,
                 birth_date=payload.birth_date,
@@ -154,35 +153,6 @@ class PractitionerRepository:
                 system=payload.system,
                 value=payload.value,
                 use=payload.use,
-            )
-            try:
-                session.add(row)
-                await session.commit()
-            except Exception:
-                await session.rollback()
-                raise
-
-        return await self.get_by_practitioner_id(practitioner_id)
-
-    async def add_name(
-        self, practitioner_id: int, payload: PractitionerNameCreate
-    ) -> Optional[PractitionerModel]:
-        async with self.session_factory() as session:
-            stmt = select(PractitionerModel).where(PractitionerModel.practitioner_id == practitioner_id)
-            result = await session.execute(stmt)
-            practitioner = result.scalars().first()
-
-            if not practitioner:
-                return None
-
-            row = PractitionerName(
-                practitioner_id=practitioner.id,
-                use=payload.use,
-                family=payload.family,
-                given=",".join(payload.given) if payload.given else None,
-                text=payload.text,
-                prefix=",".join(payload.prefix) if payload.prefix else None,
-                suffix=",".join(payload.suffix) if payload.suffix else None,
             )
             try:
                 session.add(row)

@@ -8,15 +8,6 @@ class SubjectReferenceType(str, Enum):
     GROUP = "Group"
 
 
-class ParticipantReferenceType(str, Enum):
-    """FHIR individual reference types for Encounter.participant.individual."""
-
-    PATIENT = "Patient"
-    PRACTITIONER = "Practitioner"
-    PRACTITIONER_ROLE = "PractitionerRole"
-    RELATED_PERSON = "RelatedPerson"
-
-
 class GenderType(str, Enum):
     """
     FHIR AdministrativeGender value set.
@@ -44,3 +35,8 @@ class IdentifierUse(str, Enum):
     temp = "temp"  # Temporary identifier
     secondary = "secondary"  # Additional identifier
     old = "old"  # No longer valid identifier
+
+
+class PractitionerRole(str, Enum):
+    doctor = "doctor"
+    nurse = "nurse"

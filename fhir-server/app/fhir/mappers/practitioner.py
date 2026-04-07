@@ -22,6 +22,10 @@ def to_fhir_practitioner(practitioner: "PractitionerModel") -> dict:
         "active": practitioner.active,
         "gender": practitioner.gender,
         "birthDate": practitioner.birth_date.isoformat() if practitioner.birth_date else None,
+        "role": practitioner.role,
+        "specialty": practitioner.specialty,
+        "deceasedBoolean": practitioner.deceased_boolean,
+        "deceasedDateTime": practitioner.deceased_datetime.isoformat() if practitioner.deceased_datetime else None,
     }
 
     # identifier
@@ -32,26 +36,14 @@ def to_fhir_practitioner(practitioner: "PractitionerModel") -> dict:
         ]
 
     # name
-    if practitioner.names:
-        names = []
-        for n in practitioner.names:
-            entry: dict = {}
-            if n.use:
-                entry["use"] = n.use
-            if n.family:
-                entry["family"] = n.family
-            if n.given:
-                entry["given"] = [g for g in n.given.split(",") if g]
-            if n.text:
-                entry["text"] = n.text
-            if n.prefix:
-                entry["prefix"] = [p for p in n.prefix.split(",") if p]
-            if n.suffix:
-                entry["suffix"] = [s for s in n.suffix.split(",") if s]
-            if entry:
-                names.append(entry)
-        if names:
-            result["name"] = names
+    if practitioner.given_name or practitioner.family_name:
+        result["name"] = [
+            {
+                "use": "official",
+                "family": practitioner.family_name,
+                "given": [practitioner.given_name] if practitioner.given_name else [],
+            }
+        ]
 
     # telecom
     if practitioner.telecoms:
@@ -117,9 +109,15 @@ def to_plain_practitioner(practitioner: "PractitionerModel") -> dict:
     """
     result: dict = {
         "id": practitioner.practitioner_id,
+        "given_name": practitioner.given_name,
+        "family_name": practitioner.family_name,
         "active": practitioner.active,
         "gender": practitioner.gender,
         "birth_date": practitioner.birth_date.isoformat() if practitioner.birth_date else None,
+        "role": practitioner.role,
+        "specialty": practitioner.specialty,
+        "deceased_boolean": practitioner.deceased_boolean,
+        "deceased_datetime": practitioner.deceased_datetime.isoformat() if practitioner.deceased_datetime else None,
     }
 
     if practitioner.identifiers:
@@ -130,19 +128,6 @@ def to_plain_practitioner(practitioner: "PractitionerModel") -> dict:
                 "use": i.use,
             }.items() if v is not None}
             for i in practitioner.identifiers
-        ]
-
-    if practitioner.names:
-        result["names"] = [
-            {k: v for k, v in {
-                "use": n.use,
-                "family": n.family,
-                "given": [g for g in n.given.split(",") if g] if n.given else None,
-                "text": n.text,
-                "prefix": [p for p in n.prefix.split(",") if p] if n.prefix else None,
-                "suffix": [s for s in n.suffix.split(",") if s] if n.suffix else None,
-            }.items() if v}
-            for n in practitioner.names
         ]
 
     if practitioner.telecoms:

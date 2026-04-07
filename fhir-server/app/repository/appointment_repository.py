@@ -4,22 +4,52 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker  # noqa: F40
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 
-from app.models.appointment import (
+from app.models.appointment.appointment import (
     AppointmentModel,
     AppointmentParticipant,
     AppointmentReasonCode,
     AppointmentRecurrenceTemplate,
 )
+from app.models.appointment.enums import AppointmentParticipantActorType
+from app.models.encounter.encounter import EncounterModel
+from app.models.enums import SubjectReferenceType
 from app.schemas.appointment import AppointmentCreateSchema, AppointmentPatchSchema
 
 
 def _with_relationships(stmt):
     """Attach eager-load options for all appointment sub-resources."""
     return stmt.options(
+        selectinload(AppointmentModel.encounter),
         selectinload(AppointmentModel.participants),
         selectinload(AppointmentModel.reason_codes),
         selectinload(AppointmentModel.recurrence_template),
     )
+
+
+def _parse_subject(subject_str: Optional[str]):
+    """Parse 'Patient/10001' → (SubjectReferenceType.PATIENT, 10001)."""
+    if not subject_str:
+        return None, None
+    parts = subject_str.split("/")
+    if len(parts) != 2:
+        return None, None
+    try:
+        return SubjectReferenceType(parts[0]), int(parts[1])
+    except (ValueError, KeyError):
+        return None, None
+
+
+def _parse_actor(actor_str: Optional[str]):
+    """Parse 'Practitioner/30001' → (AppointmentParticipantActorType.PRACTITIONER, 30001)."""
+    if not actor_str:
+        return None, None
+    parts = actor_str.split("/")
+    if len(parts) != 2:
+        return None, None
+    try:
+        return AppointmentParticipantActorType(parts[0]), int(parts[1])
+    except (ValueError, KeyError):
+        return None, None
 
 
 class AppointmentRepository:
@@ -28,7 +58,9 @@ class AppointmentRepository:
 
     # ── Read ──────────────────────────────────────────────────────────────
 
-    async def get_by_appointment_id(self, appointment_id: int) -> Optional[AppointmentModel]:
+    async def get_by_appointment_id(
+        self, appointment_id: int
+    ) -> Optional[AppointmentModel]:
         """Fetch by public appointment_id with all sub-resources loaded."""
         async with self.session_factory() as session:
             stmt = _with_relationships(
@@ -51,15 +83,34 @@ class AppointmentRepository:
             result = await session.execute(stmt)
             return list(result.scalars().all())
 
-    async def list(self, patient_id: Optional[int] = None) -> List[AppointmentModel]:
-        """List appointments, optionally filtered by public patient_id."""
+    async def list(
+        self,
+        patient_id: Optional[int] = None,
+        encounter_id: Optional[int] = None,
+    ) -> List[AppointmentModel]:
+        """List appointments, optionally filtered by public patient_id or encounter_id."""
         async with self.session_factory() as session:
             stmt = _with_relationships(select(AppointmentModel))
+
             if patient_id is not None:
-                # subject_reference is stored as "Patient/10001"
                 stmt = stmt.where(
-                    AppointmentModel.subject_reference == f"Patient/{patient_id}"
+                    AppointmentModel.subject_type == SubjectReferenceType.PATIENT,
+                    AppointmentModel.subject_id == patient_id,
                 )
+
+            if encounter_id is not None:
+                # Resolve public encounter_id → internal encounter PK
+                enc_result = await session.execute(
+                    select(EncounterModel.id).where(
+                        EncounterModel.encounter_id == encounter_id
+                    )
+                )
+                internal_enc_id = enc_result.scalar_one_or_none()
+                if internal_enc_id is not None:
+                    stmt = stmt.where(AppointmentModel.encounter_id == internal_enc_id)
+                else:
+                    return []
+
             result = await session.execute(stmt)
             return list(result.scalars().all())
 
@@ -71,12 +122,27 @@ class AppointmentRepository:
         user_id: str,
         org_id: Optional[str] = None,
     ) -> AppointmentModel:
+        subject_type, subject_id = _parse_subject(payload.subject)
+
         async with self.session_factory() as session:
+            # Resolve public encounter_id → internal encounter PK
+            internal_encounter_id: Optional[int] = None
+            if payload.encounter_id is not None:
+                enc_result = await session.execute(
+                    select(EncounterModel.id).where(
+                        EncounterModel.encounter_id == payload.encounter_id
+                    )
+                )
+                internal_encounter_id = enc_result.scalar_one_or_none()
+
             appointment = AppointmentModel(
                 user_id=user_id,
                 org_id=org_id,
                 status=payload.status,
-                subject_reference=payload.subject,
+                subject_type=subject_type,
+                subject_id=subject_id,
+                subject_display=payload.subject_display,
+                encounter_id=internal_encounter_id,
                 start=payload.start,
                 end=payload.end,
                 minutes_duration=payload.minutes_duration,
@@ -93,37 +159,41 @@ class AppointmentRepository:
                 specialty_display=payload.specialty_display,
                 appointment_type_code=payload.appointment_type_code,
                 appointment_type_display=payload.appointment_type_display,
+                cancellation_reason=payload.cancellation_reason,
+                cancellation_date=payload.cancellation_date,
+                recurrence_id=payload.recurrence_id,
+                occurrence_changed=payload.occurrence_changed,
             )
 
             # reason codes
             if payload.reason_codes:
                 for r in payload.reason_codes:
-                    appointment.reason_codes.append(AppointmentReasonCode(
-                        coding_system=r.coding_system,
-                        coding_code=r.coding_code,
-                        coding_display=r.coding_display,
-                        text=r.text,
-                    ))
+                    appointment.reason_codes.append(
+                        AppointmentReasonCode(
+                            coding_system=r.coding_system,
+                            coding_code=r.coding_code,
+                            coding_display=r.coding_display,
+                            text=r.text,
+                        )
+                    )
 
             # participants
             for p in payload.participant:
-                appointment.participants.append(AppointmentParticipant(
-                    actor_reference=p.actor,
-                    actor_display=p.actor_display,
-                    type_code=p.type_code,
-                    type_display=p.type_display,
-                    type_text=p.type_text,
-                    required=p.required,
-                    status=p.status,
-                    period_start=p.period_start,
-                    period_end=p.period_end,
-                ))
-
-            # recurrence fields on the appointment instance
-            if payload.recurrence_id is not None:
-                appointment.recurrence_id = payload.recurrence_id
-            if payload.occurrence_changed is not None:
-                appointment.occurrence_changed = payload.occurrence_changed
+                actor_type, actor_id = _parse_actor(p.actor)
+                appointment.participants.append(
+                    AppointmentParticipant(
+                        actor_reference_type=actor_type,
+                        actor_reference_id=actor_id,
+                        actor_display=p.actor_display,
+                        type_code=p.type_code,
+                        type_display=p.type_display,
+                        type_text=p.type_text,
+                        required=p.required,
+                        status=p.status,
+                        period_start=p.period_start,
+                        period_end=p.period_end,
+                    )
+                )
 
             # recurrenceTemplate
             if payload.recurrence_template:
@@ -139,7 +209,6 @@ class AppointmentRepository:
                     occurrence_dates=",".join(str(d) for d in rt.occurrence_dates) if rt.occurrence_dates else None,
                     excluding_dates=",".join(str(d) for d in rt.excluding_dates) if rt.excluding_dates else None,
                     excluding_recurrence_ids=",".join(str(i) for i in rt.excluding_recurrence_ids) if rt.excluding_recurrence_ids else None,
-                    # weekly
                     weekly_monday=rt.weekly_template.monday if rt.weekly_template else None,
                     weekly_tuesday=rt.weekly_template.tuesday if rt.weekly_template else None,
                     weekly_wednesday=rt.weekly_template.wednesday if rt.weekly_template else None,
@@ -148,14 +217,12 @@ class AppointmentRepository:
                     weekly_saturday=rt.weekly_template.saturday if rt.weekly_template else None,
                     weekly_sunday=rt.weekly_template.sunday if rt.weekly_template else None,
                     weekly_week_interval=rt.weekly_template.week_interval if rt.weekly_template else None,
-                    # monthly
                     monthly_day_of_month=rt.monthly_template.day_of_month if rt.monthly_template else None,
                     monthly_nth_week_code=rt.monthly_template.nth_week_code if rt.monthly_template else None,
                     monthly_nth_week_display=rt.monthly_template.nth_week_display if rt.monthly_template else None,
                     monthly_day_of_week_code=rt.monthly_template.day_of_week_code if rt.monthly_template else None,
                     monthly_day_of_week_display=rt.monthly_template.day_of_week_display if rt.monthly_template else None,
                     monthly_month_interval=rt.monthly_template.month_interval if rt.monthly_template else None,
-                    # yearly
                     yearly_year_interval=rt.yearly_template.year_interval if rt.yearly_template else None,
                 )
 

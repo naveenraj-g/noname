@@ -6,7 +6,6 @@ from app.schemas.practitioner import (
     PractitionerCreateSchema,
     PractitionerPatchSchema,
     PractitionerIdentifierCreate,
-    PractitionerNameCreate,
     PractitionerTelecomCreate,
     PractitionerAddressCreate,
     PractitionerQualificationCreate,
@@ -65,11 +64,6 @@ class PractitionerService:
         self, practitioner_id: int, payload: PractitionerIdentifierCreate
     ) -> Optional[PractitionerModel]:
         return await self.repository.add_identifier(practitioner_id, payload)
-
-    async def add_name(
-        self, practitioner_id: int, payload: PractitionerNameCreate
-    ) -> Optional[PractitionerModel]:
-        return await self.repository.add_name(practitioner_id, payload)
 
     async def add_telecom(
         self, practitioner_id: int, payload: PractitionerTelecomCreate

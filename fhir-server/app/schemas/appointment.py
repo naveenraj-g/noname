@@ -3,24 +3,11 @@ from typing import List, Optional
 from typing_extensions import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
-
-# ── Appointment status value set (FHIR R4) ────────────────────────────────
-
-AppointmentStatus = Literal[
-    "proposed",
-    "pending",
-    "booked",
-    "arrived",
-    "fulfilled",
-    "cancelled",
-    "noshow",
-    "entered-in-error",
-    "checked-in",
-    "waitlist",
-]
-
-ParticipantStatus = Literal["accepted", "declined", "tentative", "needs-action"]
-ParticipantRequired = Literal["required", "optional", "information-only"]
+from app.models.appointment.enums import (
+    AppointmentStatus,
+    AppointmentParticipantStatus,
+    AppointmentParticipantRequired,
+)
 
 
 # ── Recurrence template input schemas ─────────────────────────────────────
@@ -45,7 +32,7 @@ class RecurrenceMonthlyTemplateInput(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     day_of_month: Optional[int] = Field(None, ge=1, le=31, description="Fixed day of the month (e.g. 15).")
-    nth_week_code: Optional[str] = Field(None, description="Nth week ordinal code, e.g. '1' (1st), '2' (2nd), '-1' (last).")
+    nth_week_code: Optional[str] = Field(None, description="Nth week ordinal code, e.g. '1' (1st), '-1' (last).")
     nth_week_display: Optional[str] = None
     day_of_week_code: Optional[str] = Field(None, description="Day of week code: mon | tue | wed | thu | fri | sat | sun.")
     day_of_week_display: Optional[str] = None
@@ -102,8 +89,11 @@ class AppointmentParticipantInput(BaseModel):
     type_code: Optional[str] = Field(None, description="Participant role code, e.g. 'ATND'.")
     type_display: Optional[str] = Field(None, description="Human-readable role label, e.g. 'attender'.")
     type_text: Optional[str] = Field(None, description="Free-text role description.")
-    required: Optional[ParticipantRequired] = None
-    status: ParticipantStatus = Field("needs-action", description="Participation acceptance status.")
+    required: Optional[AppointmentParticipantRequired] = None
+    status: AppointmentParticipantStatus = Field(
+        AppointmentParticipantStatus.NEEDS_ACTION,
+        description="Participation acceptance status.",
+    )
     period_start: Optional[datetime] = None
     period_end: Optional[datetime] = None
 
@@ -136,8 +126,10 @@ class AppointmentCreateSchema(BaseModel):
             "example": {
                 "status": "booked",
                 "subject": "Patient/10001",
-                "start": "2024-06-01T09:00:00Z",
-                "end": "2024-06-01T09:30:00Z",
+                "subject_display": "John Doe",
+                "encounter_id": 20001,
+                "start": "2026-06-01T09:00:00Z",
+                "end": "2026-06-01T09:30:00Z",
                 "minutes_duration": 30,
                 "description": "Follow-up visit for hypertension management",
                 "comment": "Patient prefers morning appointments",
@@ -184,6 +176,12 @@ class AppointmentCreateSchema(BaseModel):
         None,
         description="Patient reference using the public patient_id, e.g. 'Patient/10001'.",
     )
+    subject_display: Optional[str] = Field(
+        None, description="Human-readable display name for the subject, e.g. 'John Doe'."
+    )
+    encounter_id: Optional[int] = Field(
+        None, description="Public encounter_id this appointment belongs to (e.g. 20001)."
+    )
     start: Optional[datetime] = None
     end: Optional[datetime] = None
     minutes_duration: Optional[int] = Field(None, ge=1, description="Expected duration in minutes.")
@@ -200,11 +198,21 @@ class AppointmentCreateSchema(BaseModel):
     specialty_display: Optional[str] = None
     appointment_type_code: Optional[str] = None
     appointment_type_display: Optional[str] = None
+    cancellation_reason: Optional[str] = Field(
+        None, description="Reason for cancellation (e.g. 'Patient request')."
+    )
+    cancellation_date: Optional[datetime] = Field(
+        None, description="Date/time the appointment was cancelled."
+    )
     reason_codes: Optional[List[AppointmentReasonInput]] = None
     participant: List[AppointmentParticipantInput] = Field(..., min_length=1)
     # Recurrence
-    recurrence_id: Optional[int] = Field(None, ge=1, description="For a recurring instance: which occurrence in the series this is.")
-    occurrence_changed: Optional[bool] = Field(None, description="True if this instance was changed from the recurrence template.")
+    recurrence_id: Optional[int] = Field(
+        None, ge=1, description="For a recurring instance: which occurrence in the series this is."
+    )
+    occurrence_changed: Optional[bool] = Field(
+        None, description="True if this instance was changed from the recurrence template."
+    )
     recurrence_template: Optional[RecurrenceTemplateInput] = None
 
 
@@ -226,6 +234,8 @@ class AppointmentPatchSchema(BaseModel):
     comment: Optional[str] = None
     patient_instruction: Optional[str] = None
     priority_value: Optional[int] = Field(None, ge=0)
+    cancellation_reason: Optional[str] = None
+    cancellation_date: Optional[datetime] = None
 
 
 # ── FHIR response fragments (read-only) ───────────────────────────────────
@@ -312,6 +322,7 @@ class AppointmentResponseSchema(BaseModel):
     id: str = Field(..., description="Public appointment identifier (e.g. '40001').")
     status: str
     subject: Optional[FHIRReference] = None
+    encounter: Optional[FHIRReference] = None
     start: Optional[datetime] = None
     end: Optional[datetime] = None
     minutesDuration: Optional[int] = None
@@ -320,6 +331,8 @@ class AppointmentResponseSchema(BaseModel):
     comment: Optional[str] = None
     patientInstruction: Optional[str] = None
     priority: Optional[int] = None
+    cancellationReason: Optional[FHIRCodeableConcept] = None
+    cancellationDate: Optional[datetime] = None
     serviceCategory: Optional[List[FHIRCodeableConcept]] = None
     serviceType: Optional[List[FHIRCodeableConcept]] = None
     specialty: Optional[List[FHIRCodeableConcept]] = None

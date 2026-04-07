@@ -3,16 +3,7 @@ from typing import List, Optional
 from typing_extensions import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
-
-# ── Status value set (FHIR R4) ─────────────────────────────────────────────
-
-QuestionnaireResponseStatus = Literal[
-    "in-progress",
-    "completed",
-    "amended",
-    "entered-in-error",
-    "stopped",
-]
+from app.models.questionnaire_response.enums import QuestionnaireResponseStatus
 
 
 # ── Answer value sub-types ─────────────────────────────────────────────────

@@ -3,20 +3,16 @@ from typing import List, Optional
 from typing_extensions import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
-
-# ── Encounter status value set (FHIR R4) ──────────────────────────────────
-
-EncounterStatus = Literal[
-    "planned",
-    "in-progress",
-    "onleave",
-    "finished",
-    "cancelled",
-    "entered-in-error",
-    "unknown",
-]
-
-LocationStatus = Literal["planned", "active", "reserved", "completed"]
+from app.models.encounter.enums import (
+    EncounterStatus,
+    EncounterClass,
+    EncounterPriority,
+    EncounterDiagnosisUse,
+    EncounterLocationStatus,
+    EncounterBasedOnReferenceType,
+    EncounterParticipantReferenceType,
+    EncounterSubjectReferenceType,
+)
 
 
 # ── Sub-resource input schemas ─────────────────────────────────────────────
@@ -42,10 +38,7 @@ class EncounterParticipantInput(BaseModel):
     )
     individual: Optional[str] = Field(
         None,
-        description=(
-            "FHIR reference using the public resource ID, "
-            "e.g. 'Practitioner/30001' or 'Patient/10001'."
-        ),
+        description="FHIR reference using the public resource ID, e.g. 'Practitioner/30001'.",
         examples=["Practitioner/30001"],
     )
     period_start: Optional[datetime] = None
@@ -69,8 +62,8 @@ class EncounterDiagnosisInput(BaseModel):
     condition_reference: Optional[str] = Field(
         None, description="Reference to the Condition, e.g. 'Condition/99999'."
     )
-    use_text: Optional[str] = Field(
-        None, description="Role of this diagnosis, e.g. 'chief complaint', 'discharge'."
+    use_text: Optional[EncounterDiagnosisUse] = Field(
+        None, description="Role of this diagnosis: admission | discharge | billing | other."
     )
     rank: Optional[int] = Field(None, ge=1, description="1 = primary diagnosis.")
 
@@ -82,9 +75,21 @@ class EncounterLocationInput(BaseModel):
     location_reference: Optional[str] = Field(
         None, description="Reference to the Location, e.g. 'Location/room-3'."
     )
-    status: Optional[LocationStatus] = None
+    status: Optional[EncounterLocationStatus] = None
     period_start: Optional[datetime] = None
     period_end: Optional[datetime] = None
+
+
+class EncounterBasedOnInput(BaseModel):
+    """A request that this encounter fulfils (e.g. a ServiceRequest or CarePlan)."""
+
+    model_config = ConfigDict(extra="forbid")
+    reference: str = Field(
+        ...,
+        description="FHIR reference, e.g. 'ServiceRequest/1234' or 'CarePlan/456'.",
+        examples=["ServiceRequest/1234"],
+    )
+    display: Optional[str] = Field(None, description="Human-readable label for the referenced resource.")
 
 
 # ── Encounter create / patch ───────────────────────────────────────────────
@@ -94,21 +99,20 @@ class EncounterCreateSchema(BaseModel):
     """
     Payload for creating a complete Encounter event.
 
-    An Encounter is a discrete clinical interaction — a visit, admission, or
-    telehealth session. All data is submitted as a single document; there are
-    no sub-resource endpoints. References use public IDs (e.g. Patient/10001,
-    Practitioner/30001).
+    All data is submitted as a single document; there are no sub-resource
+    endpoints. References use public IDs (e.g. Patient/10001, Practitioner/30001).
     """
 
     model_config = ConfigDict(
         extra="forbid",
         json_schema_extra={
             "example": {
-                "status": "finished",
-                "class_code": "outpatient",
+                "status": "completed",
+                "class_code": "ambulatory",
                 "subject": "Patient/10001",
-                "period_start": "2024-01-15T09:00:00Z",
-                "period_end": "2024-01-15T09:30:00Z",
+                "subject_display": "John Doe",
+                "period_start": "2026-04-01T09:00:00Z",
+                "period_end": "2026-04-01T09:30:00Z",
                 "priority": "routine",
                 "type": [
                     {
@@ -122,8 +126,8 @@ class EncounterCreateSchema(BaseModel):
                     {
                         "type_text": "Primary Physician",
                         "individual": "Practitioner/30001",
-                        "period_start": "2024-01-15T09:00:00Z",
-                        "period_end": "2024-01-15T09:30:00Z",
+                        "period_start": "2026-04-01T09:00:00Z",
+                        "period_end": "2026-04-01T09:30:00Z",
                     }
                 ],
                 "reason_codes": [
@@ -137,47 +141,51 @@ class EncounterCreateSchema(BaseModel):
                 "diagnoses": [
                     {
                         "condition_reference": "Condition/99999",
-                        "use_text": "Chief complaint",
+                        "use_text": "admission",
                         "rank": 1,
                     }
                 ],
                 "locations": [
                     {"location_reference": "Location/room-3", "status": "completed"}
                 ],
+                "based_on": [
+                    {"reference": "ServiceRequest/1234", "display": "Annual check-up request"}
+                ],
             }
         },
     )
 
     status: EncounterStatus
-    class_code: str = Field(
+    class_code: EncounterClass = Field(
         ...,
-        description="Encounter classification: outpatient | inpatient | emergency | virtual | observation.",
-        examples=["outpatient"],
+        description="Encounter class: ambulatory | inpatient | emergency | virtual | observation | home_health.",
     )
     subject: Optional[str] = Field(
         None,
         description="Patient reference using the public patient_id, e.g. 'Patient/10001'.",
     )
+    subject_display: Optional[str] = Field(
+        None, description="Human-readable display name for the subject, e.g. 'John Doe'."
+    )
     period_start: Optional[datetime] = None
     period_end: Optional[datetime] = None
-    priority: Optional[str] = Field(
+    priority: Optional[EncounterPriority] = Field(
         None,
-        description="Urgency: routine | urgent | emergency | asap.",
-        examples=["routine"],
+        description="Urgency: routine | urgent | stat | asap.",
     )
     type: Optional[List[EncounterTypeInput]] = None
     participant: Optional[List[EncounterParticipantInput]] = None
     reason_codes: Optional[List[EncounterReasonCodeInput]] = None
     diagnoses: Optional[List[EncounterDiagnosisInput]] = None
     locations: Optional[List[EncounterLocationInput]] = None
+    based_on: Optional[List[EncounterBasedOnInput]] = None
 
 
 class EncounterPatchSchema(BaseModel):
     """
     Partial update for an Encounter.
 
-    Encounters are event records — only lifecycle fields are patchable
-    after creation. To replace all structural data, re-create the encounter.
+    Only lifecycle fields are patchable after creation.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -186,7 +194,7 @@ class EncounterPatchSchema(BaseModel):
     period_end: Optional[datetime] = Field(
         None, description="Close the encounter by setting the period end time."
     )
-    priority: Optional[str] = None
+    priority: Optional[EncounterPriority] = None
 
 
 # ── FHIR response fragments (read-only) ───────────────────────────────────
@@ -257,3 +265,4 @@ class EncounterResponseSchema(BaseModel):
     diagnosis: Optional[List[FHIREncounterDiagnosis]] = None
     location: Optional[List[FHIREncounterLocation]] = None
     priority: Optional[FHIRCodeableConcept] = None
+    basedOn: Optional[List[FHIRReference]] = None

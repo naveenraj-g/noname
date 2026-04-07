@@ -6,7 +6,7 @@ from app.auth.dependencies import require_permission
 from app.auth.encounter_deps import get_authorized_encounter
 from app.core.content_negotiation import format_response, format_list_response
 from app.di.dependencies.encounter import get_encounter_service
-from app.models.encounter import EncounterModel
+from app.models.encounter.encounter import EncounterModel
 from app.schemas.encounter import (
     EncounterCreateSchema,
     EncounterPatchSchema,

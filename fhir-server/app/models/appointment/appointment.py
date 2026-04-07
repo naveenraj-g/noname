@@ -1,7 +1,23 @@
-from sqlalchemy import Column, String, DateTime, Integer, ForeignKey, Text, Sequence, Boolean, Date
+from sqlalchemy import (
+    Column,
+    String,
+    DateTime,
+    Integer,
+    ForeignKey,
+    Text,
+    Sequence,
+    Boolean,
+    Date,
+    Enum,
+)
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import FHIRBase as Base
+from app.models.appointment.enums import (
+    AppointmentStatus,
+    AppointmentParticipantActorType,
+)
+from app.models.enums import SubjectReferenceType
 
 appointment_id_seq = Sequence("appointment_id_seq", start=40000, increment=1)
 
@@ -26,7 +42,12 @@ class AppointmentModel(Base):
     org_id = Column(String, nullable=True, index=True)
 
     # Required
-    status = Column(String, nullable=False)  # proposed | pending | booked | arrived | fulfilled | cancelled | noshow | entered-in-error | checked-in | waitlist
+    status = Column(
+        Enum(AppointmentStatus), nullable=False
+    )  # proposed | pending | booked | arrived | fulfilled | cancelled | noshow | entered-in-error | checked-in | waitlist
+
+    cancellation_reason = Column(String, nullable=True)
+    cancellation_date = Column(DateTime(timezone=True), nullable=True)
 
     # Scheduling
     start = Column(DateTime(timezone=True), nullable=True)
@@ -50,22 +71,41 @@ class AppointmentModel(Base):
     appointment_type_code = Column(String, nullable=True)
     appointment_type_display = Column(String, nullable=True)
 
-    # Subject (Patient reference)
-    subject_reference = Column(String, nullable=True)  # e.g. "Patient/10001"
+    # Subject reference — stored as type enum + integer ID
+    subject_type = Column(
+        Enum(SubjectReferenceType, name="subject_reference_type"),
+        nullable=True,
+    )
+    subject_id = Column(Integer, nullable=True)
+    subject_display = Column(String, nullable=True)
+
+    # Encounter reference — the encounter this appointment belongs to
+    encounter_id = Column(
+        Integer, ForeignKey("encounter.id"), nullable=True, index=True
+    )
 
     # Recurrence — for individual instances of a recurring series
-    recurrence_id = Column(Integer, nullable=True)        # which occurrence in the series
-    occurrence_changed = Column(Boolean, nullable=True)   # was this instance changed from the template
+    recurrence_id = Column(Integer, nullable=True)  # which occurrence in the series
+    occurrence_changed = Column(
+        Boolean, nullable=True
+    )  # was this instance changed from the template
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     # Relationships
+    encounter = relationship(
+        "EncounterModel", back_populates="appointments", foreign_keys=[encounter_id]
+    )
     participants = relationship(
-        "AppointmentParticipant", back_populates="appointment", cascade="all, delete-orphan"
+        "AppointmentParticipant",
+        back_populates="appointment",
+        cascade="all, delete-orphan",
     )
     reason_codes = relationship(
-        "AppointmentReasonCode", back_populates="appointment", cascade="all, delete-orphan"
+        "AppointmentReasonCode",
+        back_populates="appointment",
+        cascade="all, delete-orphan",
     )
     recurrence_template = relationship(
         "AppointmentRecurrenceTemplate",
@@ -79,10 +119,15 @@ class AppointmentParticipant(Base):
     __tablename__ = "appointment_participant"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    appointment_id = Column(Integer, ForeignKey("appointment.id"), nullable=False, index=True)
+    appointment_id = Column(
+        Integer, ForeignKey("appointment.id"), nullable=False, index=True
+    )
     org_id = Column(String, nullable=True)
 
-    actor_reference = Column(String, nullable=True)   # e.g. "Patient/123", "Practitioner/456"
+    actor_reference_type = Column(
+        Enum(AppointmentParticipantActorType), nullable=True
+    )  # e.g. "Patient/123", "Practitioner/456"
+    actor_reference_id = Column(Integer, nullable=True)
     actor_display = Column(String, nullable=True)
 
     type_code = Column(String, nullable=True)
@@ -90,7 +135,9 @@ class AppointmentParticipant(Base):
     type_text = Column(String, nullable=True)
 
     required = Column(String, nullable=True)  # required | optional | information-only
-    status = Column(String, nullable=False, default="needs-action")  # accepted | declined | tentative | needs-action
+    status = Column(
+        String, nullable=False, default="needs-action"
+    )  # accepted | declined | tentative | needs-action
 
     period_start = Column(DateTime(timezone=True), nullable=True)
     period_end = Column(DateTime(timezone=True), nullable=True)
@@ -102,7 +149,9 @@ class AppointmentReasonCode(Base):
     __tablename__ = "appointment_reason_code"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    appointment_id = Column(Integer, ForeignKey("appointment.id"), nullable=False, index=True)
+    appointment_id = Column(
+        Integer, ForeignKey("appointment.id"), nullable=False, index=True
+    )
     org_id = Column(String, nullable=True)
 
     coding_system = Column(String, nullable=True)
@@ -127,7 +176,9 @@ class AppointmentRecurrenceTemplate(Base):
     )
 
     # recurrenceType (required) — code/display/system of the frequency
-    recurrence_type_code = Column(String, nullable=False)   # daily | weekly | monthly | yearly
+    recurrence_type_code = Column(
+        String, nullable=False
+    )  # daily | weekly | monthly | yearly
     recurrence_type_display = Column(String, nullable=True)
     recurrence_type_system = Column(String, nullable=True)
 
@@ -140,8 +191,8 @@ class AppointmentRecurrenceTemplate(Base):
     occurrence_count = Column(Integer, nullable=True)
 
     # Array fields stored as comma-separated strings
-    occurrence_dates = Column(Text, nullable=True)          # "2024-01-01,2024-01-08,..."
-    excluding_dates = Column(Text, nullable=True)           # "2024-01-15,..."
+    occurrence_dates = Column(Text, nullable=True)  # "2024-01-01,2024-01-08,..."
+    excluding_dates = Column(Text, nullable=True)  # "2024-01-15,..."
     excluding_recurrence_ids = Column(Text, nullable=True)  # "2,5,7"
 
     # ── weeklyTemplate ────────────────────────────────────────────────────
@@ -152,17 +203,23 @@ class AppointmentRecurrenceTemplate(Base):
     weekly_friday = Column(Boolean, nullable=True)
     weekly_saturday = Column(Boolean, nullable=True)
     weekly_sunday = Column(Boolean, nullable=True)
-    weekly_week_interval = Column(Integer, nullable=True)   # weeks between occurrences
+    weekly_week_interval = Column(Integer, nullable=True)  # weeks between occurrences
 
     # ── monthlyTemplate ───────────────────────────────────────────────────
-    monthly_day_of_month = Column(Integer, nullable=True)           # 1–31
-    monthly_nth_week_code = Column(String, nullable=True)           # 1st | 2nd | 3rd | 4th | -1st
+    monthly_day_of_month = Column(Integer, nullable=True)  # 1–31
+    monthly_nth_week_code = Column(
+        String, nullable=True
+    )  # 1st | 2nd | 3rd | 4th | -1st
     monthly_nth_week_display = Column(String, nullable=True)
-    monthly_day_of_week_code = Column(String, nullable=True)        # mon | tue | wed | thu | fri | sat | sun
+    monthly_day_of_week_code = Column(
+        String, nullable=True
+    )  # mon | tue | wed | thu | fri | sat | sun
     monthly_day_of_week_display = Column(String, nullable=True)
-    monthly_month_interval = Column(Integer, nullable=True)         # months between occurrences
+    monthly_month_interval = Column(
+        Integer, nullable=True
+    )  # months between occurrences
 
     # ── yearlyTemplate ────────────────────────────────────────────────────
-    yearly_year_interval = Column(Integer, nullable=True)           # years between occurrences
+    yearly_year_interval = Column(Integer, nullable=True)  # years between occurrences
 
     appointment = relationship("AppointmentModel", back_populates="recurrence_template")

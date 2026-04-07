@@ -4,21 +4,27 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker  # noqa: F40
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 
-from app.models.encounter import (
+from app.models.encounter.encounter import (
     EncounterModel,
     EncounterType,
+    BasedOn,
     EncounterParticipant,
     EncounterDiagnosis,
     EncounterLocation,
     EncounterReasonCode,
 )
-from app.models.enums import SubjectReferenceType, ParticipantReferenceType
+from app.models.encounter.enums import (
+    EncounterSubjectReferenceType,
+    EncounterParticipantReferenceType,
+    EncounterBasedOnReferenceType,
+)
 from app.schemas.encounter import EncounterCreateSchema, EncounterPatchSchema
 
 
 def _with_relationships(stmt):
     """Attach eager-load options for all encounter sub-resources."""
     return stmt.options(
+        selectinload(EncounterModel.based_ons),
         selectinload(EncounterModel.types),
         selectinload(EncounterModel.participants),
         selectinload(EncounterModel.diagnoses),
@@ -28,7 +34,7 @@ def _with_relationships(stmt):
 
 
 def _parse_subject(subject_str: Optional[str]):
-    """Parse 'Patient/10001' → (SubjectReferenceType.PATIENT, 10001)."""
+    """Parse 'Patient/10001' → (EncounterSubjectReferenceType.PATIENT, 10001)."""
     if not subject_str:
         return None, None
     parts = subject_str.split("/")
@@ -36,13 +42,13 @@ def _parse_subject(subject_str: Optional[str]):
         return None, None
     resource_type, resource_id = parts
     try:
-        return SubjectReferenceType(resource_type), int(resource_id)
+        return EncounterSubjectReferenceType(resource_type), int(resource_id)
     except (ValueError, KeyError):
         return None, None
 
 
 def _parse_individual(individual_str: Optional[str]):
-    """Parse 'Practitioner/30001' → (ParticipantReferenceType.PRACTITIONER, 30001)."""
+    """Parse 'Practitioner/30001' → (EncounterParticipantReferenceType.PRACTITIONER, 30001)."""
     if not individual_str:
         return None, None
     parts = individual_str.split("/")
@@ -50,7 +56,19 @@ def _parse_individual(individual_str: Optional[str]):
         return None, None
     resource_type, resource_id = parts
     try:
-        return ParticipantReferenceType(resource_type), int(resource_id)
+        return EncounterParticipantReferenceType(resource_type), int(resource_id)
+    except (ValueError, KeyError):
+        return None, None
+
+
+def _parse_based_on(ref_str: str):
+    """Parse 'ServiceRequest/1234' → (EncounterBasedOnReferenceType.SERVICE_REQUEST, 1234)."""
+    parts = ref_str.split("/")
+    if len(parts) != 2:
+        return None, None
+    resource_type, resource_id = parts
+    try:
+        return EncounterBasedOnReferenceType(resource_type), int(resource_id)
     except (ValueError, KeyError):
         return None, None
 
@@ -65,7 +83,9 @@ class EncounterRepository:
         """Fetch by public encounter_id with all sub-resources loaded."""
         async with self.session_factory() as session:
             stmt = _with_relationships(
-                select(EncounterModel).where(EncounterModel.encounter_id == encounter_id)
+                select(EncounterModel).where(
+                    EncounterModel.encounter_id == encounter_id
+                )
             )
             result = await session.execute(stmt)
             return result.scalars().first()
@@ -88,7 +108,7 @@ class EncounterRepository:
             stmt = _with_relationships(select(EncounterModel))
             if patient_id is not None:
                 stmt = stmt.where(
-                    EncounterModel.subject_type == SubjectReferenceType.PATIENT,
+                    EncounterModel.subject_type == EncounterSubjectReferenceType.PATIENT,
                     EncounterModel.subject_id == patient_id,
                 )
             result = await session.execute(stmt)
@@ -113,60 +133,83 @@ class EncounterRepository:
                 priority=payload.priority,
                 subject_type=subject_type,
                 subject_id=subject_id,
+                subject_display=payload.subject_display,
                 period_start=payload.period_start,
                 period_end=payload.period_end,
             )
 
+            # based_on
+            if payload.based_on:
+                for b in payload.based_on:
+                    ref_type, ref_id = _parse_based_on(b.reference)
+                    encounter.based_ons.append(
+                        BasedOn(
+                            reference_type=ref_type,
+                            reference_id=ref_id,
+                            reference_display=b.display,
+                        )
+                    )
+
             # types
             if payload.type:
                 for t in payload.type:
-                    encounter.types.append(EncounterType(
-                        coding_system=t.coding_system,
-                        coding_code=t.coding_code,
-                        coding_display=t.coding_display,
-                        text=t.text,
-                    ))
+                    encounter.types.append(
+                        EncounterType(
+                            coding_system=t.coding_system,
+                            coding_code=t.coding_code,
+                            coding_display=t.coding_display,
+                            text=t.text,
+                        )
+                    )
 
             # participants
             if payload.participant:
                 for p in payload.participant:
                     ref_type, ref_id = _parse_individual(p.individual)
-                    encounter.participants.append(EncounterParticipant(
-                        type_text=p.type_text,
-                        reference_type=ref_type,
-                        individual_reference=ref_id,
-                        period_start=p.period_start,
-                        period_end=p.period_end,
-                    ))
+                    encounter.participants.append(
+                        EncounterParticipant(
+                            type_text=p.type_text,
+                            reference_type=ref_type,
+                            individual_reference=ref_id,
+                            period_start=p.period_start,
+                            period_end=p.period_end,
+                        )
+                    )
 
             # reason codes
             if payload.reason_codes:
                 for r in payload.reason_codes:
-                    encounter.reason_codes.append(EncounterReasonCode(
-                        coding_system=r.coding_system,
-                        coding_code=r.coding_code,
-                        coding_display=r.coding_display,
-                        text=r.text,
-                    ))
+                    encounter.reason_codes.append(
+                        EncounterReasonCode(
+                            coding_system=r.coding_system,
+                            coding_code=r.coding_code,
+                            coding_display=r.coding_display,
+                            text=r.text,
+                        )
+                    )
 
             # diagnoses
             if payload.diagnoses:
                 for d in payload.diagnoses:
-                    encounter.diagnoses.append(EncounterDiagnosis(
-                        condition_reference=d.condition_reference,
-                        use_text=d.use_text,
-                        rank=str(d.rank) if d.rank is not None else None,
-                    ))
+                    encounter.diagnoses.append(
+                        EncounterDiagnosis(
+                            condition_reference=d.condition_reference,
+                            use_text=d.use_text,
+                            rank=str(d.rank) if d.rank is not None else None,
+                        )
+                    )
 
             # locations
             if payload.locations:
                 for loc in payload.locations:
-                    encounter.locations.append(EncounterLocation(
-                        location_reference=loc.location_reference,
-                        status=loc.status,
-                        period_start=loc.period_start,
-                        period_end=loc.period_end,
-                    ))
+                    encounter.locations.append(
+                        EncounterLocation(
+                            location_reference=loc.location_reference,
+                            status=loc.status,
+                            period_start=loc.period_start,
+                            period_end=loc.period_end,
+                        )
+                    )
 
             try:
                 session.add(encounter)

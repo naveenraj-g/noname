@@ -2,7 +2,13 @@ from sqlalchemy import Column, String, DateTime, Integer, Enum, ForeignKey, Sequ
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import FHIRBase as Base
-from app.models.enums import SubjectReferenceType, ParticipantReferenceType
+from app.models.encounter.enums import (
+    EncounterStatus,
+    EncounterClass,
+    EncounterParticipantReferenceType,
+    EncounterBasedOnReferenceType,
+)
+from app.models.enums import SubjectReferenceType
 
 encounter_id_seq = Sequence("encounter_id_seq", start=20000, increment=1)
 
@@ -23,13 +29,14 @@ class EncounterModel(Base):
         nullable=False,
     )
 
-    # Direct FK to patient (non-polymorphic for the primary patient relationship)
-    patient_id = Column(Integer, ForeignKey("patient.id"), nullable=True, index=True)
-
     user_id = Column(String, nullable=True, index=True)
     org_id = Column(String, nullable=True, index=True)
-    status = Column(String, nullable=True)  # planned, in-progress, finished, cancelled
-    class_code = Column(String, nullable=True)  # inpatient, outpatient, emergency, etc.
+    status = Column(
+        Enum(EncounterStatus), nullable=True
+    )  # planned, in-progress, finished, cancelled
+    class_code = Column(
+        Enum(EncounterClass), nullable=True
+    )  # inpatient, outpatient, emergency, etc.
     priority = Column(String, nullable=True)
 
     # Subject reference — stored as type enum + integer ID
@@ -47,6 +54,9 @@ class EncounterModel(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     # Relationships
+    based_ons = relationship(
+        "BasedOn", back_populates="encounter", cascade="all, delete-orphan"
+    )
     types = relationship(
         "EncounterType", back_populates="encounter", cascade="all, delete-orphan"
     )
@@ -61,6 +71,10 @@ class EncounterModel(Base):
     )
     reason_codes = relationship(
         "EncounterReasonCode", back_populates="encounter", cascade="all, delete-orphan"
+    )
+    appointments = relationship("AppointmentModel", back_populates="encounter")
+    questionnaire_responses = relationship(
+        "QuestionnaireResponseModel", back_populates="encounter"
     )
 
 
@@ -81,15 +95,22 @@ class EncounterType(Base):
     encounter = relationship("EncounterModel", back_populates="types")
 
 
-# class BasedOn(Base):
-#     __tablename__ ="based_on"
-#     id = Column(Integer, primary_key=True, autoincrement=True)
-#     encounter_id = Column(
-#         Integer, ForeignKey("encounter.id"), nullable=False, index=True
-#     )
-#     org_id = Column(String, nullable=True)
+class BasedOn(Base):
+    __tablename__ = "based_on"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    encounter_id = Column(
+        Integer, ForeignKey("encounter.id"), nullable=False, index=True
+    )
+    org_id = Column(String, nullable=True)
 
-#     reference_type=
+    reference_type = Column(
+        Enum(EncounterBasedOnReferenceType, name="based_on_reference_type"),
+        nullable=True,
+    )
+    reference_id = Column(Integer, nullable=True)
+    reference_display = Column(String, nullable=True)
+
+    encounter = relationship("EncounterModel", back_populates="based_ons")
 
 
 class EncounterParticipant(Base):
@@ -108,7 +129,7 @@ class EncounterParticipant(Base):
 
     # Individual reference — stored as type enum + integer ID
     reference_type = Column(
-        Enum(ParticipantReferenceType, name="participant_reference_type"),
+        Enum(EncounterParticipantReferenceType, name="participant_reference_type"),
         nullable=True,
     )
     individual_reference = Column(Integer, nullable=True)

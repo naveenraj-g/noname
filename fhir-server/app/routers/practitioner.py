@@ -10,7 +10,6 @@ from app.schemas.practitioner import (
     PractitionerPatchSchema,
     PractitionerResponseSchema,
     PractitionerIdentifierCreate,
-    PractitionerNameCreate,
     PractitionerTelecomCreate,
     PractitionerAddressCreate,
     PractitionerQualificationCreate,
@@ -187,34 +186,6 @@ async def add_identifier(
     practitioner_service: PractitionerService = Depends(get_practitioner_service),
 ):
     updated = await practitioner_service.add_identifier(practitioner.practitioner_id, payload)
-    if not updated:
-        raise HTTPException(status_code=404, detail="Practitioner not found")
-    return format_response(
-        practitioner_service._to_fhir(updated),
-        practitioner_service._to_plain(updated),
-        request,
-    )
-
-
-# ── Sub-resource: Names ────────────────────────────────────────────────────
-
-
-@router.post(
-    "/{practitioner_id}/names",
-    response_model=PractitionerResponseSchema,
-    response_model_exclude_none=True,
-    status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_permission("practitioner", "update"))],
-    operation_id="add_practitioner_name",
-    summary="Add a name to a Practitioner",
-)
-async def add_name(
-    payload: PractitionerNameCreate,
-    request: Request,
-    practitioner: PractitionerModel = Depends(get_authorized_practitioner),
-    practitioner_service: PractitionerService = Depends(get_practitioner_service),
-):
-    updated = await practitioner_service.add_name(practitioner.practitioner_id, payload)
     if not updated:
         raise HTTPException(status_code=404, detail="Practitioner not found")
     return format_response(

@@ -8,10 +8,17 @@ from sqlalchemy import (
     Boolean,
     Float,
     Sequence,
+    Enum,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import FHIRBase as Base
+from app.models.questionnaire_response.enums import QuestionnaireResponseStatus
+from app.models.enums import SubjectReferenceType
+from app.models.questionnaire_response.enums import (
+    QuestionnaireResponseAuthorReferenceType,
+    QuestionnaireResponseSourceReferenceType,
+)
 
 questionnaire_response_id_seq = Sequence(
     "questionnaire_response_id_seq", start=60000, increment=1
@@ -40,22 +47,38 @@ class QuestionnaireResponseModel(Base):
     # Required
     questionnaire = Column(String, nullable=False)  # canonical URL
     status = Column(
-        String, nullable=False
+        Enum(QuestionnaireResponseStatus), nullable=False
     )  # in-progress | completed | amended | entered-in-error | stopped
 
-    # Subject
-    subject_reference = Column(String, nullable=True)
+    # Subject reference — stored as type enum + integer ID
+    subject_type = Column(
+        Enum(SubjectReferenceType, name="subject_reference_type"),
+        nullable=True,
+    )
+    subject_id = Column(Integer, nullable=True)
     subject_display = Column(String, nullable=True)
 
-    # Encounter
-    encounter_reference = Column(String, nullable=True)
+    # Encounter reference — the encounter this questionnaire response belongs to
+    encounter_id = Column(
+        Integer, ForeignKey("encounter.id"), nullable=True, index=True
+    )
 
     # Authored / Author / Source
     authored = Column(DateTime(timezone=True), nullable=True)
-    author_reference = Column(String, nullable=True)
-    author_display = Column(String, nullable=True)
-    source_reference = Column(String, nullable=True)
-    source_display = Column(String, nullable=True)
+
+    author_reference_type = Column(
+        Enum(QuestionnaireResponseAuthorReferenceType, name="author_reference_type"),
+        nullable=True,
+    )
+    author_reference_id = Column(Integer, nullable=True)
+    author_reference_display = Column(String, nullable=True)
+
+    source_reference_type = Column(
+        Enum(QuestionnaireResponseSourceReferenceType, name="source_reference_type"),
+        nullable=True,
+    )
+    source_reference_id = Column(Integer, nullable=True)
+    source_reference_display = Column(String, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -66,6 +89,7 @@ class QuestionnaireResponseModel(Base):
         cascade="all, delete-orphan",
         foreign_keys="QuestionnaireResponseItemModel.response_id",
     )
+    encounter = relationship("EncounterModel", back_populates="questionnaire_responses")
 
 
 class QuestionnaireResponseItemModel(Base):

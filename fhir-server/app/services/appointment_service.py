@@ -1,6 +1,6 @@
 from typing import Optional, List
 
-from app.models.appointment import AppointmentModel
+from app.models.appointment.appointment import AppointmentModel
 from app.repository.appointment_repository import AppointmentRepository
 from app.schemas.appointment import AppointmentCreateSchema, AppointmentPatchSchema
 from app.fhir.mappers.appointment import to_fhir_appointment, to_plain_appointment
@@ -20,7 +20,9 @@ class AppointmentService:
 
     # ── Read ──────────────────────────────────────────────────────────────
 
-    async def get_raw_by_appointment_id(self, appointment_id: int) -> Optional[AppointmentModel]:
+    async def get_raw_by_appointment_id(
+        self, appointment_id: int
+    ) -> Optional[AppointmentModel]:
         """Raw ORM model — used by the auth ownership dependency."""
         return await self.repository.get_by_appointment_id(appointment_id)
 
@@ -30,8 +32,12 @@ class AppointmentService:
     async def get_me(self, user_id: str, org_id: str) -> List[AppointmentModel]:
         return await self.repository.get_me(user_id, org_id)
 
-    async def list_appointments(self, patient_id: Optional[int] = None) -> List[AppointmentModel]:
-        return await self.repository.list(patient_id=patient_id)
+    async def list_appointments(
+        self,
+        patient_id: Optional[int] = None,
+        encounter_id: Optional[int] = None,
+    ) -> List[AppointmentModel]:
+        return await self.repository.list(patient_id=patient_id, encounter_id=encounter_id)
 
     # ── Write ─────────────────────────────────────────────────────────────
 

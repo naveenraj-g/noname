@@ -22,6 +22,8 @@ def to_fhir_patient(patient: "PatientModel") -> dict:
         "active": patient.active,
         "gender": patient.gender,
         "birthDate": patient.birth_date.isoformat() if patient.birth_date else None,
+        "deceasedBoolean": patient.deceased_boolean,
+        "deceasedDateTime": patient.deceased_datetime.isoformat() if patient.deceased_datetime else None,
     }
 
     # name
@@ -77,6 +79,8 @@ def to_plain_patient(patient: "PatientModel") -> dict:
         "gender": patient.gender,
         "birth_date": patient.birth_date.isoformat() if patient.birth_date else None,
         "active": patient.active,
+        "deceased_boolean": patient.deceased_boolean,
+        "deceased_datetime": patient.deceased_datetime.isoformat() if patient.deceased_datetime else None,
     }
 
     if patient.identifiers:

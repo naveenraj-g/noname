@@ -1,4 +1,14 @@
-from sqlalchemy import Column, Date, Boolean, Integer, String, DateTime, Enum, Sequence, ForeignKey
+from sqlalchemy import (
+    Column,
+    Date,
+    Boolean,
+    Integer,
+    String,
+    DateTime,
+    Enum,
+    Sequence,
+    ForeignKey,
+)
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import FHIRBase as Base
@@ -31,6 +41,8 @@ class PatientModel(Base):
     gender = Column(Enum(GenderType, name="gender_type"), nullable=True)
     birth_date = Column(Date, nullable=True)
     active = Column(Boolean, nullable=True, default=True)
+    deceased_boolean = Column(Boolean, nullable=True, default=False)
+    deceased_datetime = Column(DateTime(timezone=True), nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -67,7 +79,7 @@ class PatientTelecom(Base):
 
     system = Column(String, nullable=True)  # phone | fax | email | url | sms | other
     value = Column(String, nullable=True)
-    use = Column(String, nullable=True)     # home | work | temp | old | mobile
+    use = Column(String, nullable=True)  # home | work | temp | old | mobile
 
     patient = relationship("PatientModel", back_populates="telecoms")
 

@@ -1,6 +1,6 @@
 from typing import Optional, List
 
-from app.models.encounter import EncounterModel
+from app.models.encounter.encounter import EncounterModel
 from app.repository.encounter_repository import EncounterRepository
 from app.schemas.encounter import EncounterCreateSchema, EncounterPatchSchema
 from app.fhir.mappers.encounter import to_fhir_encounter, to_plain_encounter
@@ -20,7 +20,9 @@ class EncounterService:
 
     # ── Read ──────────────────────────────────────────────────────────────
 
-    async def get_raw_by_encounter_id(self, encounter_id: int) -> Optional[EncounterModel]:
+    async def get_raw_by_encounter_id(
+        self, encounter_id: int
+    ) -> Optional[EncounterModel]:
         """Raw ORM model — used by the auth ownership dependency."""
         return await self.repository.get_by_encounter_id(encounter_id)
 
@@ -30,7 +32,9 @@ class EncounterService:
     async def get_me(self, user_id: str, org_id: str) -> List[EncounterModel]:
         return await self.repository.get_me(user_id, org_id)
 
-    async def list_encounters(self, patient_id: Optional[int] = None) -> List[EncounterModel]:
+    async def list_encounters(
+        self, patient_id: Optional[int] = None
+    ) -> List[EncounterModel]:
         return await self.repository.list(patient_id=patient_id)
 
     # ── Write ─────────────────────────────────────────────────────────────

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from app.models.encounter import EncounterModel
+    from app.models.encounter.encounter import EncounterModel
 
 
 def to_fhir_encounter(encounter: "EncounterModel") -> dict:
@@ -27,9 +27,12 @@ def to_fhir_encounter(encounter: "EncounterModel") -> dict:
 
     # subject
     if encounter.subject_type and encounter.subject_id:
-        result["subject"] = {
+        subject: dict = {
             "reference": f"{encounter.subject_type.value}/{encounter.subject_id}"
         }
+        if encounter.subject_display:
+            subject["display"] = encounter.subject_display
+        result["subject"] = subject
 
     # period
     if encounter.period_start or encounter.period_end:
@@ -44,11 +47,25 @@ def to_fhir_encounter(encounter: "EncounterModel") -> dict:
     if encounter.priority:
         result["priority"] = {"text": encounter.priority}
 
+    # basedOn
+    if encounter.based_ons:
+        based_on_list = []
+        for b in encounter.based_ons:
+            if b.reference_type and b.reference_id:
+                entry: dict = {
+                    "reference": f"{b.reference_type.value}/{b.reference_id}"
+                }
+                if b.reference_display:
+                    entry["display"] = b.reference_display
+                based_on_list.append(entry)
+        if based_on_list:
+            result["basedOn"] = based_on_list
+
     # type
     if encounter.types:
         type_list = []
         for t in encounter.types:
-            entry: dict = {}
+            entry = {}
             coding = {k: v for k, v in {
                 "system": t.coding_system,
                 "code": t.coding_code,
@@ -159,11 +176,25 @@ def to_plain_encounter(encounter: "EncounterModel") -> dict:
 
     if encounter.subject_type and encounter.subject_id:
         result["subject"] = f"{encounter.subject_type.value}/{encounter.subject_id}"
+        if encounter.subject_display:
+            result["subject_display"] = encounter.subject_display
 
     if encounter.period_start:
         result["period_start"] = encounter.period_start.isoformat()
     if encounter.period_end:
         result["period_end"] = encounter.period_end.isoformat()
+
+    if encounter.based_ons:
+        result["based_on"] = [
+            {k: v for k, v in {
+                "reference": (
+                    f"{b.reference_type.value}/{b.reference_id}"
+                    if b.reference_type and b.reference_id else None
+                ),
+                "display": b.reference_display,
+            }.items() if v is not None}
+            for b in encounter.based_ons
+        ]
 
     if encounter.types:
         result["types"] = [

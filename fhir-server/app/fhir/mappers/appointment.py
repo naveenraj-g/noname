@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from app.models.appointment import AppointmentModel
+    from app.models.appointment.appointment import AppointmentModel
 
 
 def to_fhir_appointment(appointment: "AppointmentModel") -> dict:
@@ -13,6 +13,7 @@ def to_fhir_appointment(appointment: "AppointmentModel") -> dict:
     Rules:
       - Uses appointment_id (public) as the FHIR logical id — never the internal PK.
       - priority is an unsignedInt in FHIR R4 (not an object).
+      - subject and participant actor are reconstructed from stored type enum + public ID.
       - None / empty values are stripped from the output.
     """
     result: dict = {
@@ -20,6 +21,21 @@ def to_fhir_appointment(appointment: "AppointmentModel") -> dict:
         "id": str(appointment.appointment_id),
         "status": appointment.status,
     }
+
+    # subject
+    if appointment.subject_type and appointment.subject_id:
+        subject: dict = {
+            "reference": f"{appointment.subject_type.value}/{appointment.subject_id}"
+        }
+        if appointment.subject_display:
+            subject["display"] = appointment.subject_display
+        result["subject"] = subject
+
+    # encounter (loaded via relationship → use public encounter_id)
+    if appointment.encounter and appointment.encounter.encounter_id:
+        result["encounter"] = {
+            "reference": f"Encounter/{appointment.encounter.encounter_id}"
+        }
 
     if appointment.start:
         result["start"] = appointment.start.isoformat()
@@ -37,8 +53,12 @@ def to_fhir_appointment(appointment: "AppointmentModel") -> dict:
         result["comment"] = appointment.comment
     if appointment.priority_value is not None:
         result["priority"] = appointment.priority_value  # R4: unsignedInt
-    if appointment.subject_reference:
-        result["subject"] = {"reference": appointment.subject_reference}
+
+    # cancellation
+    if appointment.cancellation_reason:
+        result["cancellationReason"] = {"text": appointment.cancellation_reason}
+    if appointment.cancellation_date:
+        result["cancellationDate"] = appointment.cancellation_date.isoformat()
 
     # Coded concept fields
     if appointment.service_category_code:
@@ -93,8 +113,10 @@ def to_fhir_appointment(appointment: "AppointmentModel") -> dict:
     for p in appointment.participants:
         entry: dict = {"status": p.status}
 
-        if p.actor_reference:
-            actor: dict = {"reference": p.actor_reference}
+        if p.actor_reference_type and p.actor_reference_id:
+            actor: dict = {
+                "reference": f"{p.actor_reference_type.value}/{p.actor_reference_id}"
+            }
             if p.actor_display:
                 actor["display"] = p.actor_display
             entry["actor"] = actor
@@ -163,7 +185,6 @@ def to_fhir_appointment(appointment: "AppointmentModel") -> dict:
                 int(i) for i in rt.excluding_recurrence_ids.split(",") if i
             ]
 
-        # weeklyTemplate
         weekly_fields = {
             "monday": rt.weekly_monday,
             "tuesday": rt.weekly_tuesday,
@@ -179,7 +200,6 @@ def to_fhir_appointment(appointment: "AppointmentModel") -> dict:
         if weekly:
             rt_data["weeklyTemplate"] = weekly
 
-        # monthlyTemplate
         if rt.monthly_month_interval is not None:
             monthly: dict = {"monthInterval": rt.monthly_month_interval}
             if rt.monthly_day_of_month is not None:
@@ -196,7 +216,6 @@ def to_fhir_appointment(appointment: "AppointmentModel") -> dict:
                 }.items() if v}
             rt_data["monthlyTemplate"] = monthly
 
-        # yearlyTemplate
         if rt.yearly_year_interval is not None:
             rt_data["yearlyTemplate"] = {"yearInterval": rt.yearly_year_interval}
 
@@ -215,8 +234,16 @@ def to_plain_appointment(appointment: "AppointmentModel") -> dict:
         "status": appointment.status,
     }
 
-    if appointment.subject_reference:
-        result["subject"] = appointment.subject_reference
+    # subject
+    if appointment.subject_type and appointment.subject_id:
+        result["subject"] = f"{appointment.subject_type.value}/{appointment.subject_id}"
+        if appointment.subject_display:
+            result["subject_display"] = appointment.subject_display
+
+    # encounter
+    if appointment.encounter and appointment.encounter.encounter_id:
+        result["encounter_id"] = appointment.encounter.encounter_id
+
     if appointment.start:
         result["start"] = appointment.start.isoformat()
     if appointment.end:
@@ -233,6 +260,10 @@ def to_plain_appointment(appointment: "AppointmentModel") -> dict:
         result["patient_instruction"] = appointment.patient_instruction
     if appointment.priority_value is not None:
         result["priority_value"] = appointment.priority_value
+    if appointment.cancellation_reason:
+        result["cancellation_reason"] = appointment.cancellation_reason
+    if appointment.cancellation_date:
+        result["cancellation_date"] = appointment.cancellation_date.isoformat()
     if appointment.service_category_code:
         result["service_category_code"] = appointment.service_category_code
     if appointment.service_category_display:
@@ -264,7 +295,10 @@ def to_plain_appointment(appointment: "AppointmentModel") -> dict:
     if appointment.participants:
         result["participants"] = [
             {k: v for k, v in {
-                "actor": p.actor_reference,
+                "actor": (
+                    f"{p.actor_reference_type.value}/{p.actor_reference_id}"
+                    if p.actor_reference_type and p.actor_reference_id else None
+                ),
                 "actor_display": p.actor_display,
                 "type_code": p.type_code,
                 "type_display": p.type_display,
@@ -284,9 +318,7 @@ def to_plain_appointment(appointment: "AppointmentModel") -> dict:
 
     rt = appointment.recurrence_template
     if rt:
-        rt_plain: dict = {
-            "recurrence_type_code": rt.recurrence_type_code,
-        }
+        rt_plain: dict = {"recurrence_type_code": rt.recurrence_type_code}
         if rt.recurrence_type_display:
             rt_plain["recurrence_type_display"] = rt.recurrence_type_display
         if rt.recurrence_type_system:

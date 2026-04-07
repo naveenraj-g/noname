@@ -5,8 +5,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from app.auth.dependencies import require_permission
 from app.auth.questionnaire_response_deps import get_authorized_questionnaire_response
 from app.core.content_negotiation import format_response, format_list_response
-from app.di.dependencies.questionnaire_response import get_questionnaire_response_service
-from app.models.questionnaire_response import QuestionnaireResponseModel
+from app.di.dependencies.questionnaire_response import (
+    get_questionnaire_response_service,
+)
+from app.models.questionnaire_response.questionnaire_response import (
+    QuestionnaireResponseModel,
+)
 from app.schemas.questionnaire_response import (
     QuestionnaireResponseCreateSchema,
     QuestionnaireResponsePatchSchema,
@@ -33,7 +37,9 @@ router = APIRouter()
 async def create_questionnaire_response(
     payload: QuestionnaireResponseCreateSchema,
     request: Request,
-    qr_service: QuestionnaireResponseService = Depends(get_questionnaire_response_service),
+    qr_service: QuestionnaireResponseService = Depends(
+        get_questionnaire_response_service
+    ),
 ):
     user_id: str = request.state.user.get("sub")
     org_id: str = request.state.user.get("activeOrganizationId")
@@ -59,7 +65,9 @@ async def create_questionnaire_response(
 )
 async def get_my_questionnaire_responses(
     request: Request,
-    qr_service: QuestionnaireResponseService = Depends(get_questionnaire_response_service),
+    qr_service: QuestionnaireResponseService = Depends(
+        get_questionnaire_response_service
+    ),
 ):
     user_id: str = request.state.user.get("sub")
     org_id: str = request.state.user.get("activeOrganizationId")
@@ -85,7 +93,9 @@ async def get_my_questionnaire_responses(
 async def get_questionnaire_response(
     request: Request,
     qr: QuestionnaireResponseModel = Depends(get_authorized_questionnaire_response),
-    qr_service: QuestionnaireResponseService = Depends(get_questionnaire_response_service),
+    qr_service: QuestionnaireResponseService = Depends(
+        get_questionnaire_response_service
+    ),
 ):
     return format_response(
         qr_service._to_fhir(qr),
@@ -110,7 +120,9 @@ async def patch_questionnaire_response(
     payload: QuestionnaireResponsePatchSchema,
     request: Request,
     qr: QuestionnaireResponseModel = Depends(get_authorized_questionnaire_response),
-    qr_service: QuestionnaireResponseService = Depends(get_questionnaire_response_service),
+    qr_service: QuestionnaireResponseService = Depends(
+        get_questionnaire_response_service
+    ),
 ):
     updated = await qr_service.patch_questionnaire_response(
         qr.questionnaire_response_id, payload
@@ -134,14 +146,19 @@ async def patch_questionnaire_response(
     dependencies=[Depends(require_permission("questionnaire_response", "read"))],
     operation_id="list_questionnaire_responses",
     summary="List all QuestionnaireResponse resources",
-    description="Returns all questionnaire responses. Filter by patient using `?patient_id={patient_id}` (public patient_id).",
+    description="Returns all questionnaire responses. Filter by `?patient_id=` or `?encounter_id=` (public IDs).",
 )
 async def list_questionnaire_responses(
     request: Request,
     patient_id: Optional[int] = None,
-    qr_service: QuestionnaireResponseService = Depends(get_questionnaire_response_service),
+    encounter_id: Optional[int] = None,
+    qr_service: QuestionnaireResponseService = Depends(
+        get_questionnaire_response_service
+    ),
 ):
-    responses = await qr_service.list_questionnaire_responses(patient_id=patient_id)
+    responses = await qr_service.list_questionnaire_responses(
+        patient_id=patient_id, encounter_id=encounter_id
+    )
     return format_list_response(
         [qr_service._to_fhir(qr) for qr in responses],
         [qr_service._to_plain(qr) for qr in responses],
@@ -161,7 +178,9 @@ async def list_questionnaire_responses(
 )
 async def delete_questionnaire_response(
     qr: QuestionnaireResponseModel = Depends(get_authorized_questionnaire_response),
-    qr_service: QuestionnaireResponseService = Depends(get_questionnaire_response_service),
+    qr_service: QuestionnaireResponseService = Depends(
+        get_questionnaire_response_service
+    ),
 ):
     await qr_service.delete_questionnaire_response(qr.questionnaire_response_id)
     return None

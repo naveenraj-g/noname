@@ -10,7 +10,7 @@ get_authorized_appointment — reusable FastAPI dependency that:
 
 from fastapi import Depends, HTTPException, Request, Path, status
 
-from app.models.appointment import AppointmentModel
+from app.models.appointment.appointment import AppointmentModel
 from app.services.appointment_service import AppointmentService
 from app.di.dependencies.appointment import get_appointment_service
 
@@ -31,9 +31,13 @@ async def get_authorized_appointment(
 
     appointment = await appointment_service.get_raw_by_appointment_id(appointment_id)
     if not appointment:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found"
+        )
 
     if appointment.user_id != user_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
+        )
 
     return appointment

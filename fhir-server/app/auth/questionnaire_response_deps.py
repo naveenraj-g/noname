@@ -10,9 +10,13 @@ get_authorized_questionnaire_response — reusable FastAPI dependency that:
 
 from fastapi import Depends, HTTPException, Request, Path, status
 
-from app.models.questionnaire_response import QuestionnaireResponseModel
+from app.models.questionnaire_response.questionnaire_response import (
+    QuestionnaireResponseModel,
+)
 from app.services.questionnaire_response_service import QuestionnaireResponseService
-from app.di.dependencies.questionnaire_response import get_questionnaire_response_service
+from app.di.dependencies.questionnaire_response import (
+    get_questionnaire_response_service,
+)
 
 
 async def get_authorized_questionnaire_response(
@@ -20,7 +24,9 @@ async def get_authorized_questionnaire_response(
         ..., ge=1, description="Public questionnaire response identifier."
     ),
     request: Request = ...,
-    qr_service: QuestionnaireResponseService = Depends(get_questionnaire_response_service),
+    qr_service: QuestionnaireResponseService = Depends(
+        get_questionnaire_response_service
+    ),
 ) -> QuestionnaireResponseModel:
     """
     Dependency that resolves and ownership-validates a QuestionnaireResponse.
@@ -39,6 +45,8 @@ async def get_authorized_questionnaire_response(
         )
 
     if qr.user_id != user_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
+        )
 
     return qr

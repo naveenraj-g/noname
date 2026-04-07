@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from typing import List, Optional
 from typing_extensions import Literal
 from pydantic import BaseModel, ConfigDict, Field
@@ -84,6 +84,8 @@ class PatientCreateSchema(BaseModel):
     gender: Optional[AdministrativeGender] = None
     birth_date: Optional[date] = None
     active: Optional[bool] = True
+    deceased_boolean: Optional[bool] = False
+    deceased_datetime: Optional[datetime] = None
 
 
 class PatientPatchSchema(BaseModel):
@@ -96,6 +98,8 @@ class PatientPatchSchema(BaseModel):
     gender: Optional[AdministrativeGender] = None
     birth_date: Optional[date] = None
     active: Optional[bool] = None
+    deceased_boolean: Optional[bool] = None
+    deceased_datetime: Optional[datetime] = None
 
 
 # ── Patient response ───────────────────────────────────────────────────────
@@ -118,6 +122,8 @@ class PatientResponseSchema(BaseModel):
     name: Optional[List[FHIRHumanName]] = None
     gender: Optional[str] = None
     birthDate: Optional[date] = None
+    deceasedBoolean: Optional[bool] = None
+    deceasedDateTime: Optional[datetime] = None
     identifier: Optional[List[FHIRIdentifier]] = None
     telecom: Optional[List[FHIRTelecom]] = None
     address: Optional[List[FHIRAddress]] = None

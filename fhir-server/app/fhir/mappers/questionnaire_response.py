@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from app.models.questionnaire_response import (
+    from app.models.questionnaire_response.questionnaire_response import (
         QuestionnaireResponseModel,
         QuestionnaireResponseItemModel,
         QuestionnaireResponseAnswerModel,
@@ -136,7 +136,8 @@ def to_fhir_questionnaire_response(qr: "QuestionnaireResponseModel") -> dict:
 
     Rules:
       - Uses questionnaire_response_id (public) as FHIR logical id.
-      - References reconstructed from stored flat reference strings.
+      - References reconstructed from stored type enum + public ID.
+      - Encounter reference uses loaded relationship → public encounter_id.
       - Nested items reconstructed from sub_items relationships.
     """
     result: dict = {
@@ -146,28 +147,40 @@ def to_fhir_questionnaire_response(qr: "QuestionnaireResponseModel") -> dict:
         "status": qr.status,
     }
 
-    if qr.subject_reference:
-        subject: dict = {"reference": qr.subject_reference}
+    # subject
+    if qr.subject_type and qr.subject_id:
+        subject: dict = {
+            "reference": f"{qr.subject_type.value}/{qr.subject_id}"
+        }
         if qr.subject_display:
             subject["display"] = qr.subject_display
         result["subject"] = subject
 
-    if qr.encounter_reference:
-        result["encounter"] = {"reference": qr.encounter_reference}
+    # encounter (via FK relationship → public encounter_id)
+    if qr.encounter and qr.encounter.encounter_id:
+        result["encounter"] = {
+            "reference": f"Encounter/{qr.encounter.encounter_id}"
+        }
 
     if qr.authored:
         result["authored"] = qr.authored.isoformat()
 
-    if qr.author_reference:
-        author: dict = {"reference": qr.author_reference}
-        if qr.author_display:
-            author["display"] = qr.author_display
+    # author
+    if qr.author_reference_type and qr.author_reference_id:
+        author: dict = {
+            "reference": f"{qr.author_reference_type.value}/{qr.author_reference_id}"
+        }
+        if qr.author_reference_display:
+            author["display"] = qr.author_reference_display
         result["author"] = author
 
-    if qr.source_reference:
-        source: dict = {"reference": qr.source_reference}
-        if qr.source_display:
-            source["display"] = qr.source_display
+    # source
+    if qr.source_reference_type and qr.source_reference_id:
+        source: dict = {
+            "reference": f"{qr.source_reference_type.value}/{qr.source_reference_id}"
+        }
+        if qr.source_reference_display:
+            source["display"] = qr.source_reference_display
         result["source"] = source
 
     # Only emit top-level items (parent_item_id is None); sub_items carry the children
@@ -189,22 +202,30 @@ def to_plain_questionnaire_response(qr: "QuestionnaireResponseModel") -> dict:
         "status": qr.status,
     }
 
-    if qr.subject_reference:
-        result["subject"] = qr.subject_reference
-    if qr.subject_display:
-        result["subject_display"] = qr.subject_display
-    if qr.encounter_reference:
-        result["encounter"] = qr.encounter_reference
+    # subject
+    if qr.subject_type and qr.subject_id:
+        result["subject"] = f"{qr.subject_type.value}/{qr.subject_id}"
+        if qr.subject_display:
+            result["subject_display"] = qr.subject_display
+
+    # encounter
+    if qr.encounter and qr.encounter.encounter_id:
+        result["encounter_id"] = qr.encounter.encounter_id
+
     if qr.authored:
         result["authored"] = qr.authored.isoformat()
-    if qr.author_reference:
-        result["author"] = qr.author_reference
-    if qr.author_display:
-        result["author_display"] = qr.author_display
-    if qr.source_reference:
-        result["source"] = qr.source_reference
-    if qr.source_display:
-        result["source_display"] = qr.source_display
+
+    # author
+    if qr.author_reference_type and qr.author_reference_id:
+        result["author"] = f"{qr.author_reference_type.value}/{qr.author_reference_id}"
+        if qr.author_reference_display:
+            result["author_display"] = qr.author_reference_display
+
+    # source
+    if qr.source_reference_type and qr.source_reference_id:
+        result["source"] = f"{qr.source_reference_type.value}/{qr.source_reference_id}"
+        if qr.source_reference_display:
+            result["source_display"] = qr.source_reference_display
 
     top_level = [i for i in qr.items if i.parent_item_id is None]
     if top_level:

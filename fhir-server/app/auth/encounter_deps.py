@@ -10,7 +10,7 @@ get_authorized_encounter — reusable FastAPI dependency that:
 
 from fastapi import Depends, HTTPException, Request, Path, status
 
-from app.models.encounter import EncounterModel
+from app.models.encounter.encounter import EncounterModel
 from app.services.encounter_service import EncounterService
 from app.di.dependencies.encounter import get_encounter_service
 
@@ -31,9 +31,13 @@ async def get_authorized_encounter(
 
     encounter = await encounter_service.get_raw_by_encounter_id(encounter_id)
     if not encounter:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Encounter not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Encounter not found"
+        )
 
     if encounter.user_id != user_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
+        )
 
     return encounter
