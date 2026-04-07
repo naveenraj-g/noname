@@ -31,6 +31,21 @@ class PatientRepository:
             result = await session.execute(stmt)
             return result.scalars().first()
 
+    async def get_by_patient_id_in_org(
+        self, patient_id: int, user_id: str, org_id: str
+    ) -> Optional[PatientModel]:
+        """Fetch by public patient_id scoped to the owning user and organisation."""
+        async with self.session_factory() as session:
+            stmt = _with_relationships(
+                select(PatientModel).where(
+                    PatientModel.patient_id == patient_id,
+                    PatientModel.user_id == user_id,
+                    PatientModel.org_id == org_id,
+                )
+            )
+            result = await session.execute(stmt)
+            return result.scalars().first()
+
     async def get_by_user_id(self, user_id: str) -> Optional[PatientModel]:
         """Fetch by user_id with all sub-resources loaded."""
         async with self.session_factory() as session:

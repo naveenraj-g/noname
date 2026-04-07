@@ -14,10 +14,10 @@ from app.models.encounter.encounter import (
     EncounterReasonCode,
 )
 from app.models.encounter.enums import (
-    EncounterSubjectReferenceType,
     EncounterParticipantReferenceType,
     EncounterBasedOnReferenceType,
 )
+from app.models.enums import SubjectReferenceType
 from app.schemas.encounter import EncounterCreateSchema, EncounterPatchSchema
 
 
@@ -34,7 +34,7 @@ def _with_relationships(stmt):
 
 
 def _parse_subject(subject_str: Optional[str]):
-    """Parse 'Patient/10001' → (EncounterSubjectReferenceType.PATIENT, 10001)."""
+    """Parse 'Patient/10001' → (SubjectReferenceType.PATIENT, 10001)."""
     if not subject_str:
         return None, None
     parts = subject_str.split("/")
@@ -42,7 +42,7 @@ def _parse_subject(subject_str: Optional[str]):
         return None, None
     resource_type, resource_id = parts
     try:
-        return EncounterSubjectReferenceType(resource_type), int(resource_id)
+        return SubjectReferenceType(resource_type), int(resource_id)
     except (ValueError, KeyError):
         return None, None
 
@@ -108,7 +108,7 @@ class EncounterRepository:
             stmt = _with_relationships(select(EncounterModel))
             if patient_id is not None:
                 stmt = stmt.where(
-                    EncounterModel.subject_type == EncounterSubjectReferenceType.PATIENT,
+                    EncounterModel.subject_type == SubjectReferenceType.PATIENT,
                     EncounterModel.subject_id == patient_id,
                 )
             result = await session.execute(stmt)
@@ -121,6 +121,7 @@ class EncounterRepository:
         payload: EncounterCreateSchema,
         user_id: str,
         org_id: Optional[str] = None,
+        subject_display: Optional[str] = None,
     ) -> EncounterModel:
         subject_type, subject_id = _parse_subject(payload.subject)
 
@@ -133,7 +134,7 @@ class EncounterRepository:
                 priority=payload.priority,
                 subject_type=subject_type,
                 subject_id=subject_id,
-                subject_display=payload.subject_display,
+                subject_display=subject_display,
                 period_start=payload.period_start,
                 period_end=payload.period_end,
             )

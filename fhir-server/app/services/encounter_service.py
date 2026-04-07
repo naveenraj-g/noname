@@ -1,14 +1,18 @@
 from typing import Optional, List
 
+from app.core.references import parse_reference, resolve_subject
 from app.models.encounter.encounter import EncounterModel
+from app.models.enums import SubjectReferenceType
 from app.repository.encounter_repository import EncounterRepository
 from app.schemas.encounter import EncounterCreateSchema, EncounterPatchSchema
 from app.fhir.mappers.encounter import to_fhir_encounter, to_plain_encounter
+from app.services.patient_service import PatientService
 
 
 class EncounterService:
-    def __init__(self, repository: EncounterRepository):
+    def __init__(self, repository: EncounterRepository, patient_service: PatientService):
         self.repository = repository
+        self.patient_service = patient_service
 
     # ── Formatters (called by route layer after content negotiation) ──────
 
@@ -45,7 +49,13 @@ class EncounterService:
         user_id: str,
         org_id: Optional[str] = None,
     ) -> EncounterModel:
-        return await self.repository.create(payload, user_id, org_id)
+        subject_display: Optional[str] = None
+        if payload.subject:
+            subject_type, subject_id = parse_reference(payload.subject, SubjectReferenceType)
+            subject_display = await resolve_subject(
+                subject_type, subject_id, user_id, org_id, patient_service=self.patient_service
+            )
+        return await self.repository.create(payload, user_id, org_id, subject_display)
 
     async def patch_encounter(
         self, encounter_id: int, payload: EncounterPatchSchema

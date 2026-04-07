@@ -11,7 +11,6 @@ from app.models.encounter.enums import (
     EncounterLocationStatus,
     EncounterBasedOnReferenceType,
     EncounterParticipantReferenceType,
-    EncounterSubjectReferenceType,
 )
 
 
@@ -110,7 +109,6 @@ class EncounterCreateSchema(BaseModel):
                 "status": "completed",
                 "class_code": "ambulatory",
                 "subject": "Patient/10001",
-                "subject_display": "John Doe",
                 "period_start": "2026-04-01T09:00:00Z",
                 "period_end": "2026-04-01T09:30:00Z",
                 "priority": "routine",
@@ -163,9 +161,6 @@ class EncounterCreateSchema(BaseModel):
     subject: Optional[str] = Field(
         None,
         description="Patient reference using the public patient_id, e.g. 'Patient/10001'.",
-    )
-    subject_display: Optional[str] = Field(
-        None, description="Human-readable display name for the subject, e.g. 'John Doe'."
     )
     period_start: Optional[datetime] = None
     period_end: Optional[datetime] = None

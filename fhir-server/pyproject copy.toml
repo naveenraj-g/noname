@@ -3,8 +3,7 @@ name = "server"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.12"
-
+requires-python = ">=3.14"
 dependencies = [
     "asyncpg>=0.31.0",
     "dependency-injector>=4.48.3",
@@ -16,5 +15,4 @@ dependencies = [
     "python-keycloak>=7.1.1",
     "redis>=7.2.0",
     "sqlalchemy>=2.0.46",
-    "uvicorn[standard]>=0.30.0",
 ]

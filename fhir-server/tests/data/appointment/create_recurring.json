@@ -1,6 +1,7 @@
 {
   "status": "booked",
   "subject": "Patient/10001",
+  "subject_display": "John Doe",
   "start": "2026-04-14T10:00:00Z",
   "end": "2026-04-14T10:30:00Z",
   "minutes_duration": 30,

@@ -5,5 +5,6 @@
   "gender": "female",
   "birth_date": "1978-03-15",
   "role": "doctor",
-  "specialty": "Cardiology"
+  "specialty": "Cardiology",
+  "deceased_boolean": false
 }

@@ -3,5 +3,6 @@
   "family_name": "Doe",
   "gender": "male",
   "birth_date": "1985-04-12",
-  "active": true
+  "active": true,
+  "deceased_boolean": false
 }

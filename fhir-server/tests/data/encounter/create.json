@@ -2,7 +2,6 @@
   "status": "completed",
   "class_code": "ambulatory",
   "subject": "Patient/10001",
-  "subject_display": "John Doe",
   "period_start": "2026-04-01T09:00:00Z",
   "period_end": "2026-04-01T09:30:00Z",
   "priority": "routine",

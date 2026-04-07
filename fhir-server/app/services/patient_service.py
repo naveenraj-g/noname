@@ -36,6 +36,11 @@ class PatientService:
     async def get_patient(self, patient_id: int) -> Optional[PatientModel]:
         return await self.repository.get_by_patient_id(patient_id)
 
+    async def get_patient_in_org(
+        self, patient_id: int, user_id: str, org_id: str
+    ) -> Optional[PatientModel]:
+        return await self.repository.get_by_patient_id_in_org(patient_id, user_id, org_id)
+
     async def get_me(self, user_id: str, org_id: str) -> Optional[PatientModel]:
         return await self.repository.get_me(user_id, org_id)
 
