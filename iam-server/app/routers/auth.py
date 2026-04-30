@@ -73,8 +73,6 @@ async def login(
             detail="Invalid username or password",
         )
 
-    # Decode the access token to get user info
-    public_key = await get_keycloak_public_key()
     try:
         user_info = decode_token(tokens["access_token"])
     except Exception as e:
@@ -85,18 +83,18 @@ async def login(
         )
 
     # Create a server-side session
-    # session_id = await session_manager.create_session(user_info, tokens)
+    session_id = await session_manager.create_session(user_info, tokens)
 
     # Set session cookie (httponly for security)
-    # response.set_cookie(
-    #     key=settings.SESSION_COOKIE_NAME,
-    #     value=session_id,
-    #     httponly=True,
-    #     samesite="lax",
-    #     secure=settings.ENVIRONMENT != "development",
-    #     max_age=settings.SESSION_TTL_SECONDS,
-    #     path="/",
-    # )
+    response.set_cookie(
+        key=settings.SESSION_COOKIE_NAME,
+        value=session_id,
+        httponly=True,
+        samesite="lax",
+        secure=settings.ENVIRONMENT != "development",
+        max_age=settings.SESSION_TTL_SECONDS,
+        path="/",
+    )
 
     logger.info("User '%s' logged in successfully", body.username)
     return AuthResponse(message="Login successful", user=_build_user_info(user_info))

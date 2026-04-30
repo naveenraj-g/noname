@@ -1,3 +1,7 @@
 {
-  "authProvider": "keycloak"
+  "auth": "betterauth",
+  "authUrl": "https://iam.drgodly.com",
+  "isFHIRSync": true,
+  "fhirSyncUrl": "https://fhir.drgodly.com",
+  "fhirMCPUrl": "https://fhirmcp.drgodly.com/mcp"
 }

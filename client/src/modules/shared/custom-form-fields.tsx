@@ -29,7 +29,7 @@ import {
 type FormControlProps<
   TFieldValues extends FieldValues = FieldValues,
   TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>,
-  TTransformedValues = TFieldValues
+  TTransformedValues = TFieldValues,
 > = {
   name: TName;
   label?: React.ReactNode;
@@ -40,36 +40,36 @@ type FormControlProps<
 type TFormBaseProps<
   TFieldValues extends FieldValues = FieldValues,
   TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>,
-  TTransformedValues = TFieldValues
+  TTransformedValues = TFieldValues,
 > = FormControlProps<TFieldValues, TName, TTransformedValues> & {
   horizontal?: boolean;
   controlFirst?: boolean;
   children: (
     field: Parameters<
       ControllerProps<TFieldValues, TName, TTransformedValues>["render"]
-    >[0]["field"] & { "aria-invalid": boolean; id: string }
+    >[0]["field"] & { "aria-invalid": boolean; id: string },
   ) => React.ReactNode;
 };
 
 type TFormControlFunc<
-  ExtraProps extends Record<string, unknown> = Record<never, never>
+  ExtraProps extends Record<string, unknown> = Record<never, never>,
 > = <
   TFieldValues extends FieldValues = FieldValues,
   TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>,
-  TTransformedValues = TFieldValues
+  TTransformedValues = TFieldValues,
 >(
   props: FormControlProps<TFieldValues, TName, TTransformedValues> &
     ExtraProps & {
       className?: string;
       placeholder?: string;
       type?: HTMLInputTypeAttribute;
-    }
+    },
 ) => React.ReactNode;
 
 function FormBase<
   TFieldValues extends FieldValues = FieldValues,
   TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>,
-  TTransformedValues = TFieldValues
+  TTransformedValues = TFieldValues,
 >({
   children,
   control,
@@ -228,7 +228,7 @@ export const FormRadioGroup: TFormControlFunc<{
           {...field}
           id={id}
           value={
-            value === true ? "true" : value === false ? "false" : value ?? ""
+            value === true ? "true" : value === false ? "false" : (value ?? "")
           }
           onValueChange={(val) => {
             if (val === "true") onChange(true);
@@ -262,7 +262,7 @@ export const FormSwitch: TFormControlFunc<{
           className={cn(
             `flex items-center gap-3 h-full`,
             childrenFirst ? "flex-row-reverse" : "flex-row",
-            containerClass
+            containerClass,
           )}
         >
           <Switch

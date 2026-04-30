@@ -2,14 +2,8 @@ from jwt import PyJWKClient
 import jwt
 from app.core.config import settings
 
-KEYCLOAK_TOKEN_URL = (
-    f"{settings.KEYCLOAK_URL}/realms/"
-    f"{settings.KEYCLOAK_REALM_NAME}/protocol/openid-connect/token"
-)
 
-JWKS_URL = f"{settings.KEYCLOAK_URL}/realms/{settings.KEYCLOAK_REALM_NAME}/protocol/openid-connect/certs"
-
-jwks_client = PyJWKClient(JWKS_URL)
+jwks_client = PyJWKClient(settings.IAM_JWKS_URL)
 
 
 def decode_token(token: str):
@@ -18,7 +12,8 @@ def decode_token(token: str):
     return jwt.decode(
         token,
         signing_key.key,
-        algorithms=["RS256"],
-        issuer=f"{settings.KEYCLOAK_URL}/realms/{settings.KEYCLOAK_REALM_NAME}",
-        options={"verify_aud": False},
+        audience=settings.IAM_ISSUER,
+        issuer=settings.IAM_ISSUER,
+        algorithms=["EdDSA", "RS256"],
+        options={"verify_aud": True},
     )

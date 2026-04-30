@@ -1,0 +1,8 @@
+services:
+  speech-to-text-agent:
+    image: ghcr.io/naveenraj-g/python-livekit-speech-to-text--agent:latest
+    restart: unless-stopped
+    ports:
+      - "8008:8000"
+    env_file:
+      - .env
