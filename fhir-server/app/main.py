@@ -7,6 +7,7 @@ from fastapi.responses import Response
 
 from app.auth.dependencies import get_current_user
 from app.core.config import settings
+from app.routers.vitals import router as vitals_router
 from app.core.database import Database
 from app.core.logging import get_logger, setup_logging
 from app.core.redis import redis_client
@@ -96,6 +97,10 @@ Designed for integration with AI agents via FastMCP dynamic tool generation.
             "name": "Appointments",
             "description": "Operations for managing FHIR Appointment resources — scheduled healthcare events for patients and practitioners at a specific date and time. Supports create, read, update, list, and delete.",
         },
+        {
+            "name": "Vitals",
+            "description": "Operations for storing and retrieving user vitals data — activity, heart rate, sleep, and demographic metrics from wearable devices. Not a FHIR resource.",
+        },
     ],
     lifespan=lifespan,
 )
@@ -115,6 +120,13 @@ app.middleware("http")(request_context_middleware)
 
 app.include_router(
     api_router, prefix="/api/fhir/v1", dependencies=[Depends(get_current_user)]
+)
+
+app.include_router(
+    vitals_router,
+    prefix="/api/v1/vitals",
+    tags=["Vitals"],
+    dependencies=[Depends(get_current_user)],
 )
 
 
