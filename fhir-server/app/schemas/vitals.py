@@ -11,41 +11,45 @@ class VitalsCreateSchema(BaseModel):
             "example": {
                 "pseudo_id": "user_12345",
                 "pseudo_id2": "device_fitbit_67890",
-                "date": "2026-04-29",
-                "datetime": "2026-04-29T07:30:00Z",
-                "activity_name": "Walking",
-                "duration_minutes": 45.5,
-                "start_time": "2026-04-29T06:45:00Z",
-                "end_time": "2026-04-29T07:30:30Z",
-                "avg_hr_bpm": 72,
-                "max_hr_bpm": 120,
-                "elevation_gain_m": 12.5,
-                "distance_meters": 5000,
-                "calories_kcal": 350.5,
-                "steps": 10234,
-                "speed_mps": 1.4,
-                "active_zone_minutes": 30,
-                "fatburn_active_zone_minutes": 15,
-                "cardio_active_zone_minutes": 10,
-                "peak_active_zone_minutes": 5,
-                "age": 30,
-                "gender": "male",
-                "weight_kg": 75.2,
-                "height_cm": 180.0,
-                "resting_heart_rate": 60,
+                # Core Activity
+                "steps": 8542,
+                "calories_kcal": 2150.5,
+                "distance_meters": 5200.0,
+                "total_active_minutes": 45,
+                # Exercise
+                "activity_name": "WALKING",
+                "exercise_duration_minutes": 45.5,
+                "active_zone_minutes": 45,
+                "fatburn_active_zone_minutes": 22,
+                "cardio_active_zone_minutes": 13,
+                "peak_active_zone_minutes": 9,
+                # Vitals
+                "resting_heart_rate": 72,
+                "heart_rate": 72,
                 "heart_rate_variability": 45.5,
-                "stress_management_score": 80,
-                "sleep_minutes": 420,
+                "stress_management_score": None,
+                "blood_pressure_systolic": None,
+                "blood_pressure_diastolic": None,
+                # Sleep
+                "sleep_minutes": 480,
                 "rem_sleep_minutes": 90,
                 "deep_sleep_minutes": 60,
-                "awake_minutes": 20,
                 "light_sleep_minutes": 250,
-                "bed_time": "2026-04-28T22:30:00Z",
-                "wake_up_time": "2026-04-29T05:30:00Z",
-                "deep_sleep_percent": 14.3,
+                "awake_minutes": 20,
+                "bed_time": "22:00",
+                "wake_up_time": "06:00",
+                "deep_sleep_percent": 14.2,
                 "rem_sleep_percent": 21.4,
-                "awake_percent": 4.8,
                 "light_sleep_percent": 59.5,
+                "awake_percent": 4.7,
+                # Biometrics
+                "weight_kg": 70.0,
+                "height_cm": 175.0,
+                "age": None,
+                "gender": None,
+                # Metadata
+                "recorded_at": "2026-05-02T18:03:00",
+                "date": "2026-05-02",
             }
         },
     )
@@ -55,54 +59,50 @@ class VitalsCreateSchema(BaseModel):
     pseudo_id2: Optional[str] = None
     patient_id: Optional[int] = Field(None, description="Public patient_id.")
 
-    summary: Optional[str] = None
-
-    # Temporal
-    date: Optional[date] = None
-    datetime: Optional[datetime] = None
-
-    # Activity
-    activity_name: Optional[str] = None
-    duration_minutes: Optional[float] = None
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
-    avg_hr_bpm: Optional[int] = None
-    max_hr_bpm: Optional[int] = None
-    elevation_gain_m: Optional[float] = None
-    distance_meters: Optional[float] = None
-    calories_kcal: Optional[float] = None
+    # Core Activity
     steps: Optional[int] = None
-    speed_mps: Optional[float] = None
+    calories_kcal: Optional[float] = None
+    distance_meters: Optional[float] = None
+    total_active_minutes: Optional[int] = None
 
-    # Active zone minutes
+    # Exercise
+    activity_name: Optional[str] = None
+    exercise_duration_minutes: Optional[float] = None
     active_zone_minutes: Optional[int] = None
     fatburn_active_zone_minutes: Optional[int] = None
     cardio_active_zone_minutes: Optional[int] = None
     peak_active_zone_minutes: Optional[int] = None
 
-    # Demographics
-    age: Optional[int] = None
-    gender: Optional[str] = None
-    weight_kg: Optional[float] = None
-    height_cm: Optional[float] = None
-
-    # Heart / stress
+    # Vitals
     resting_heart_rate: Optional[int] = None
+    heart_rate: Optional[int] = None
     heart_rate_variability: Optional[float] = None
     stress_management_score: Optional[int] = None
+    blood_pressure_systolic: Optional[int] = None
+    blood_pressure_diastolic: Optional[int] = None
 
     # Sleep
     sleep_minutes: Optional[int] = None
     rem_sleep_minutes: Optional[int] = None
     deep_sleep_minutes: Optional[int] = None
-    awake_minutes: Optional[int] = None
     light_sleep_minutes: Optional[int] = None
-    bed_time: Optional[datetime] = None
-    wake_up_time: Optional[datetime] = None
+    awake_minutes: Optional[int] = None
+    bed_time: Optional[str] = None
+    wake_up_time: Optional[str] = None
     deep_sleep_percent: Optional[float] = None
     rem_sleep_percent: Optional[float] = None
-    awake_percent: Optional[float] = None
     light_sleep_percent: Optional[float] = None
+    awake_percent: Optional[float] = None
+
+    # Biometrics
+    weight_kg: Optional[float] = None
+    height_cm: Optional[float] = None
+    age: Optional[int] = None
+    gender: Optional[str] = None
+
+    # Metadata
+    recorded_at: Optional[datetime] = None
+    date: Optional[date] = None
 
 
 class VitalsPatchSchema(BaseModel):
@@ -113,54 +113,50 @@ class VitalsPatchSchema(BaseModel):
     pseudo_id2: Optional[str] = None
     patient_id: Optional[int] = None
 
-    summary: Optional[str] = None
-
-    # Temporal
-    date: Optional[date] = None
-    datetime: Optional[datetime] = None
-
-    # Activity
-    activity_name: Optional[str] = None
-    duration_minutes: Optional[float] = None
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
-    avg_hr_bpm: Optional[int] = None
-    max_hr_bpm: Optional[int] = None
-    elevation_gain_m: Optional[float] = None
-    distance_meters: Optional[float] = None
-    calories_kcal: Optional[float] = None
+    # Core Activity
     steps: Optional[int] = None
-    speed_mps: Optional[float] = None
+    calories_kcal: Optional[float] = None
+    distance_meters: Optional[float] = None
+    total_active_minutes: Optional[int] = None
 
-    # Active zone minutes
+    # Exercise
+    activity_name: Optional[str] = None
+    exercise_duration_minutes: Optional[float] = None
     active_zone_minutes: Optional[int] = None
     fatburn_active_zone_minutes: Optional[int] = None
     cardio_active_zone_minutes: Optional[int] = None
     peak_active_zone_minutes: Optional[int] = None
 
-    # Demographics
-    age: Optional[int] = None
-    gender: Optional[str] = None
-    weight_kg: Optional[float] = None
-    height_cm: Optional[float] = None
-
-    # Heart / stress
+    # Vitals
     resting_heart_rate: Optional[int] = None
+    heart_rate: Optional[int] = None
     heart_rate_variability: Optional[float] = None
     stress_management_score: Optional[int] = None
+    blood_pressure_systolic: Optional[int] = None
+    blood_pressure_diastolic: Optional[int] = None
 
     # Sleep
     sleep_minutes: Optional[int] = None
     rem_sleep_minutes: Optional[int] = None
     deep_sleep_minutes: Optional[int] = None
-    awake_minutes: Optional[int] = None
     light_sleep_minutes: Optional[int] = None
-    bed_time: Optional[datetime] = None
-    wake_up_time: Optional[datetime] = None
+    awake_minutes: Optional[int] = None
+    bed_time: Optional[str] = None
+    wake_up_time: Optional[str] = None
     deep_sleep_percent: Optional[float] = None
     rem_sleep_percent: Optional[float] = None
-    awake_percent: Optional[float] = None
     light_sleep_percent: Optional[float] = None
+    awake_percent: Optional[float] = None
+
+    # Biometrics
+    weight_kg: Optional[float] = None
+    height_cm: Optional[float] = None
+    age: Optional[int] = None
+    gender: Optional[str] = None
+
+    # Metadata
+    recorded_at: Optional[datetime] = None
+    date: Optional[date] = None
 
 
 class VitalsResponseSchema(BaseModel):
@@ -175,54 +171,50 @@ class VitalsResponseSchema(BaseModel):
     patient_id: Optional[int] = None
     org_id: Optional[str] = None
 
-    summary: Optional[str] = None
-
-    # Temporal
-    date: Optional[date] = None
-    datetime: Optional[datetime] = None
-
-    # Activity
-    activity_name: Optional[str] = None
-    duration_minutes: Optional[float] = None
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
-    avg_hr_bpm: Optional[int] = None
-    max_hr_bpm: Optional[int] = None
-    elevation_gain_m: Optional[float] = None
-    distance_meters: Optional[float] = None
-    calories_kcal: Optional[float] = None
+    # Core Activity
     steps: Optional[int] = None
-    speed_mps: Optional[float] = None
+    calories_kcal: Optional[float] = None
+    distance_meters: Optional[float] = None
+    total_active_minutes: Optional[int] = None
 
-    # Active zone minutes
+    # Exercise
+    activity_name: Optional[str] = None
+    exercise_duration_minutes: Optional[float] = None
     active_zone_minutes: Optional[int] = None
     fatburn_active_zone_minutes: Optional[int] = None
     cardio_active_zone_minutes: Optional[int] = None
     peak_active_zone_minutes: Optional[int] = None
 
-    # Demographics
-    age: Optional[int] = None
-    gender: Optional[str] = None
-    weight_kg: Optional[float] = None
-    height_cm: Optional[float] = None
-
-    # Heart / stress
+    # Vitals
     resting_heart_rate: Optional[int] = None
+    heart_rate: Optional[int] = None
     heart_rate_variability: Optional[float] = None
     stress_management_score: Optional[int] = None
+    blood_pressure_systolic: Optional[int] = None
+    blood_pressure_diastolic: Optional[int] = None
 
     # Sleep
     sleep_minutes: Optional[int] = None
     rem_sleep_minutes: Optional[int] = None
     deep_sleep_minutes: Optional[int] = None
-    awake_minutes: Optional[int] = None
     light_sleep_minutes: Optional[int] = None
-    bed_time: Optional[datetime] = None
-    wake_up_time: Optional[datetime] = None
+    awake_minutes: Optional[int] = None
+    bed_time: Optional[str] = None
+    wake_up_time: Optional[str] = None
     deep_sleep_percent: Optional[float] = None
     rem_sleep_percent: Optional[float] = None
-    awake_percent: Optional[float] = None
     light_sleep_percent: Optional[float] = None
+    awake_percent: Optional[float] = None
+
+    # Biometrics
+    weight_kg: Optional[float] = None
+    height_cm: Optional[float] = None
+    age: Optional[int] = None
+    gender: Optional[str] = None
+
+    # Metadata
+    recorded_at: Optional[datetime] = None
+    date: Optional[date] = None
 
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
