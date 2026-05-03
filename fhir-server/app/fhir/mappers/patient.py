@@ -74,6 +74,8 @@ def to_plain_patient(patient: "PatientModel") -> dict:
     """
     result: dict = {
         "id": patient.patient_id,
+        "user_id": patient.user_id,
+        "org_id": patient.org_id,
         "given_name": patient.given_name,
         "family_name": patient.family_name,
         "gender": patient.gender,

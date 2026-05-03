@@ -109,6 +109,8 @@ def to_plain_practitioner(practitioner: "PractitionerModel") -> dict:
     """
     result: dict = {
         "id": practitioner.practitioner_id,
+        "user_id": practitioner.user_id,
+        "org_id": practitioner.org_id,
         "given_name": practitioner.given_name,
         "family_name": practitioner.family_name,
         "active": practitioner.active,
