@@ -1,7 +1,8 @@
-from typing import List, Optional
+from datetime import date, datetime
+from typing import List, Optional, Tuple
 
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from sqlalchemy.future import select
 
 from app.models.vitals.vitals import VitalsModel
 from app.schemas.vitals import VitalsCreateSchema, VitalsPatchSchema
@@ -25,22 +26,45 @@ class VitalsRepository:
             result = await session.execute(stmt)
             return list(result.scalars().all())
 
+    def _apply_list_filters(self, stmt, user_id, patient_id, org_id, date_filter, recorded_at_from, recorded_at_to):
+        if user_id:
+            stmt = stmt.where(VitalsModel.user_id == user_id)
+        if patient_id is not None:
+            stmt = stmt.where(VitalsModel.patient_id == patient_id)
+        if org_id:
+            stmt = stmt.where(VitalsModel.org_id == org_id)
+        if date_filter is not None:
+            stmt = stmt.where(VitalsModel.date == date_filter)
+        if recorded_at_from is not None:
+            stmt = stmt.where(VitalsModel.recorded_at >= recorded_at_from)
+        if recorded_at_to is not None:
+            stmt = stmt.where(VitalsModel.recorded_at <= recorded_at_to)
+        return stmt
+
     async def list(
         self,
         user_id: Optional[str] = None,
         patient_id: Optional[int] = None,
         org_id: Optional[str] = None,
-    ) -> List[VitalsModel]:
+        date_filter: Optional[date] = None,
+        recorded_at_from: Optional[datetime] = None,
+        recorded_at_to: Optional[datetime] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> Tuple[List[VitalsModel], int]:
         async with self.session_factory() as session:
-            stmt = select(VitalsModel)
-            if user_id:
-                stmt = stmt.where(VitalsModel.user_id == user_id)
-            if patient_id is not None:
-                stmt = stmt.where(VitalsModel.patient_id == patient_id)
-            if org_id:
-                stmt = stmt.where(VitalsModel.org_id == org_id)
-            result = await session.execute(stmt)
-            return list(result.scalars().all())
+            base = self._apply_list_filters(
+                select(VitalsModel), user_id, patient_id, org_id,
+                date_filter, recorded_at_from, recorded_at_to,
+            )
+            count_stmt = self._apply_list_filters(
+                select(func.count()).select_from(VitalsModel), user_id, patient_id, org_id,
+                date_filter, recorded_at_from, recorded_at_to,
+            )
+            total = (await session.execute(count_stmt)).scalar_one()
+            stmt = base.order_by(VitalsModel.recorded_at.desc()).offset(offset).limit(limit)
+            rows = list((await session.execute(stmt)).scalars().all())
+        return rows, total
 
     async def create(
         self,

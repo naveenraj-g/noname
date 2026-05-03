@@ -1,4 +1,5 @@
-from typing import List, Optional
+from datetime import date, datetime
+from typing import List, Optional, Tuple
 
 from app.models.vitals.vitals import VitalsModel
 from app.repository.patient_repository import PatientRepository
@@ -33,9 +34,21 @@ class VitalsService:
         user_id: Optional[str] = None,
         patient_id: Optional[int] = None,
         org_id: Optional[str] = None,
-    ) -> List[VitalsModel]:
+        date_filter: Optional[date] = None,
+        recorded_at_from: Optional[datetime] = None,
+        recorded_at_to: Optional[datetime] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> Tuple[List[VitalsModel], int]:
         return await self.repository.list(
-            user_id=user_id, patient_id=patient_id, org_id=org_id
+            user_id=user_id,
+            patient_id=patient_id,
+            org_id=org_id,
+            date_filter=date_filter,
+            recorded_at_from=recorded_at_from,
+            recorded_at_to=recorded_at_to,
+            limit=limit,
+            offset=offset,
         )
 
     async def create_vitals(

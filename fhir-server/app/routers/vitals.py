@@ -1,6 +1,7 @@
+from datetime import date, datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 
@@ -140,23 +141,43 @@ async def patch_vitals(
 
 @router.get(
     "/",
-    response_model=list[VitalsResponseSchema],
-    response_model_exclude_none=True,
     operation_id="list_vitals",
     summary="List vitals entries with optional filters",
-    description="Filter by `?user_id=`, `?patient_id=`, or `?org_id=`.",
+    description=(
+        "Filter by `user_id`, `patient_id`, `org_id`, `date`, "
+        "`recorded_at_from`, or `recorded_at_to`. "
+        "Results are ordered by `recorded_at` descending. "
+        "Use `limit` and `offset` for pagination."
+    ),
 )
 async def list_vitals(
     request: Request,
     user_id: Optional[str] = None,
     patient_id: Optional[int] = None,
     org_id: Optional[str] = None,
+    date: Optional[date] = Query(None, description="Exact match on the date field (YYYY-MM-DD)."),
+    recorded_at_from: Optional[datetime] = Query(None, description="recorded_at >= this datetime."),
+    recorded_at_to: Optional[datetime] = Query(None, description="recorded_at <= this datetime."),
+    limit: int = Query(50, ge=1, le=200, description="Max records to return (1–200)."),
+    offset: int = Query(0, ge=0, description="Number of records to skip."),
     vitals_service: VitalsService = Depends(get_vitals_service),
 ):
-    records = await vitals_service.list_vitals(
-        user_id=user_id, patient_id=patient_id, org_id=org_id
+    records, total = await vitals_service.list_vitals(
+        user_id=user_id,
+        patient_id=patient_id,
+        org_id=org_id,
+        date_filter=date,
+        recorded_at_from=recorded_at_from,
+        recorded_at_to=recorded_at_to,
+        limit=limit,
+        offset=offset,
     )
-    return JSONResponse(content=jsonable_encoder([_serialize(v) for v in records]))
+    return JSONResponse(content=jsonable_encoder({
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "data": [_serialize(v) for v in records],
+    }))
 
 
 @router.delete(
