@@ -1,13 +1,21 @@
 from typing import List, Optional
 
 from app.models.vitals.vitals import VitalsModel
+from app.repository.patient_repository import PatientRepository
 from app.repository.vitals_repository import VitalsRepository
 from app.schemas.vitals import VitalsCreateSchema, VitalsPatchSchema
 
 
 class VitalsService:
-    def __init__(self, repository: VitalsRepository):
+    def __init__(self, repository: VitalsRepository, patient_repository: PatientRepository):
         self.repository = repository
+        self.patient_repository = patient_repository
+
+    async def _resolve_patient_id(self, user_id: Optional[str]) -> Optional[int]:
+        if not user_id:
+            return None
+        patient = await self.patient_repository.get_by_user_id(user_id)
+        return patient.patient_id if patient else None
 
     async def get_raw_by_vitals_id(self, vitals_id: int) -> Optional[VitalsModel]:
         return await self.repository.get_by_vitals_id(vitals_id)
@@ -36,11 +44,22 @@ class VitalsService:
         user_id: Optional[str] = None,
         org_id: Optional[str] = None,
     ) -> VitalsModel:
+        if payload.patient_id is None:
+            resolved = await self._resolve_patient_id(user_id)
+            if resolved is not None:
+                payload = payload.model_copy(update={"patient_id": resolved})
         return await self.repository.create(payload, user_id, org_id)
 
     async def patch_vitals(
-        self, vitals_id: int, payload: VitalsPatchSchema
+        self,
+        vitals_id: int,
+        payload: VitalsPatchSchema,
+        user_id: Optional[str] = None,
     ) -> Optional[VitalsModel]:
+        if payload.patient_id is None:
+            resolved = await self._resolve_patient_id(user_id)
+            if resolved is not None:
+                payload = payload.model_copy(update={"patient_id": resolved})
         return await self.repository.patch(vitals_id, payload)
 
     async def delete_vitals(self, vitals_id: int) -> bool:

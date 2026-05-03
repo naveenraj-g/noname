@@ -131,7 +131,8 @@ async def patch_vitals(
     vitals: VitalsModel = Depends(get_authorized_vitals),
     vitals_service: VitalsService = Depends(get_vitals_service),
 ):
-    updated = await vitals_service.patch_vitals(vitals.vitals_id, payload)
+    user_id: str = request.state.user.get("sub")
+    updated = await vitals_service.patch_vitals(vitals.vitals_id, payload, user_id)
     if not updated:
         raise HTTPException(status_code=404, detail="Vitals not found")
     return JSONResponse(content=jsonable_encoder(_serialize(updated)))
